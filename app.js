@@ -50,8 +50,11 @@ function isSupabaseReady() {
 const dexieAPI = {
     async read(filters) {
         try {
-            if (filters && filters.agen_id) return await db.tickets.where('agen_id').equals(filters.agen_id).toArray();
-            return await db.tickets.toArray();
+            var data;
+            if (filters && filters.agen_id) data = await db.tickets.where('agen_id').equals(filters.agen_id).toArray();
+            else data = await db.tickets.toArray();
+            data.sort(function (a, b) { return (b.no_tiket || '').localeCompare(a.no_tiket || ''); });
+            return data;
         } catch (err) { console.error('DB Error:', err); showToast('Gagal membaca data.', 'danger'); return null; }
     },
     async create(data) {
