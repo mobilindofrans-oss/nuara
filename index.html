@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#1565c0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Naura Trans">
+    <meta name="apple-mobile-web-app-title" content="Loket Bus">
     <link rel="apple-touch-icon" href="icon.svg">
     <script>
         if (location.protocol === 'https:' || location.protocol === 'http:') {
@@ -29,35 +29,117 @@
             <h1><i class="fas fa-bus"></i> LOKET BUS</h1>
             <p>Sistem Tiket Penumpang</p>
         </div>
+
     </header>
 
-    <!-- BOTTOM NAVIGATION -->
+    <!-- LOGIN OVERLAY -->
+    <div id="overlayLogin" class="overlay-cetak" style="z-index:9999;">
+        <div class="overlay-content" style="max-width:360px;">
+            <div class="overlay-header">
+                <span><i class="fas fa-right-to-bracket"></i> Login</span>
+            </div>
+            <div class="overlay-body" style="flex-direction:column;padding:20px;">
+                <div id="loginUserList"></div>
+                <div id="loginPinSection" style="display:none;">
+                    <p style="text-align:center;margin:0 0 12px;font-size:16px;" id="loginUserName"></p>
+                    <input type="password" id="loginPinInput" class="form-control" placeholder="Masukkan PIN" inputmode="numeric" maxlength="6" style="font-size:16px;text-align:center;letter-spacing:6px;">
+                    <button id="btnLogin" class="btn btn-primary btn-block" style="margin-top:12px;"><i class="fas fa-key"></i> Login</button>
+                    <button id="btnLoginBack" class="btn btn-outline btn-block" style="margin-top:6px;">Kembali</button>
+                    <p id="loginError" style="color:var(--danger);font-size:13px;display:none;margin:6px 0 0;text-align:center;"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHANGE PIN OVERLAY (admin) -->
+    <div id="overlayChangePin" class="overlay-cetak" style="z-index:9998;">
+        <div class="overlay-content" style="max-width:360px;">
+            <div class="overlay-header">
+                <span><i class="fas fa-key"></i> Ganti PIN User</span>
+                <button onclick="getEl('overlayChangePin').style.display='none'" class="overlay-close"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="overlay-body" style="flex-direction:column;padding:20px;">
+                <p style="text-align:center;margin:0 0 12px;font-size:16px;" id="changePinNama"></p>
+                <input type="hidden" id="changePinUserId">
+                <div class="form-group"><label>PIN Baru</label><input type="password" id="changePinNew" class="form-control" placeholder="4-6 digit" inputmode="numeric" maxlength="6" style="font-size:16px;text-align:center;letter-spacing:6px;"></div>
+                <div class="form-group"><label>Konfirmasi PIN</label><input type="password" id="changePinConfirm" class="form-control" placeholder="Ulangi PIN baru" inputmode="numeric" maxlength="6" style="font-size:16px;text-align:center;letter-spacing:6px;"></div>
+                <button id="btnSubmitChangePin" class="btn btn-primary btn-block" style="margin-top:12px;"><i class="fas fa-floppy-disk"></i> Simpan PIN</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAVIGATION (only Beranda) -->
     <nav class="bottom-nav" role="tablist">
-        <button id="tabTambah" class="bottom-nav-btn active" role="tab">
-            <i class="fas fa-plus-circle"></i>
-            <span>Tambah</span>
-        </button>
-        <button id="tabDaftar" class="bottom-nav-btn" role="tab">
-            <i class="fas fa-ticket"></i>
-            <span>Tiket</span>
-        </button>
-        <button id="tabLaporan" class="bottom-nav-btn" role="tab">
-            <i class="fas fa-chart-line"></i>
-            <span>Laporan</span>
-        </button>
-        <button id="tabPengaturan" class="bottom-nav-btn" role="tab">
-            <i class="fas fa-gear"></i>
-            <span>Pengaturan</span>
+        <button id="tabBeranda" class="bottom-nav-btn active" role="tab">
+            <i class="fas fa-house"></i>
+            <span>Beranda</span>
         </button>
     </nav>
 
     <!-- ================================ -->
+    <!-- SECTION: BERANDA -->
+    <!-- ================================ -->
+    <section id="sectionBeranda" class="section active" role="tabpanel">
+        <div class="container">
+            <div class="menu-grid" id="menuGrid"></div>
+        </div>
+    </section>
+
+    <!-- ================================ -->
+    <!-- SECTION: KELOLA AGEN -->
+    <!-- ================================ -->
+    <section id="sectionAgen" class="section" role="tabpanel">
+        <div class="container">
+            <div class="card">
+                <div class="card-title">
+                    <button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button>
+                    <i class="fas fa-store"></i> Kelola Agen
+                </div>
+                <div id="agenList"></div>
+                <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                    <input type="text" id="newAgenId" class="form-control" placeholder="ID (misal: AG002)" style="flex:1;min-width:100px;font-size:14px;">
+                    <input type="text" id="newAgenNama" class="form-control" placeholder="Nama agen" style="flex:2;min-width:140px;font-size:14px;">
+                </div>
+                <input type="text" id="newAgenAlamat" class="form-control" placeholder="Alamat agen (opsional)" style="margin-top:6px;font-size:14px;">
+                <button type="button" id="btnAddAgen" class="btn btn-sm btn-primary" style="width:100%;margin-top:6px;"><i class="fas fa-plus"></i> Tambah Agen</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================ -->
+    <!-- SECTION: KELOLA USER -->
+    <!-- ================================ -->
+    <section id="sectionUser" class="section" role="tabpanel">
+        <div class="container">
+            <div class="card">
+                <div class="card-title">
+                    <button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button>
+                    <i class="fas fa-users"></i> Kelola User
+                </div>
+                <div id="userList"></div>
+                <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                    <input type="text" id="newUserName" class="form-control" placeholder="Nama user" style="flex:2;min-width:140px;font-size:14px;">
+                    <input type="password" id="newUserPin" class="form-control" placeholder="PIN 4-6 digit" style="flex:1;min-width:80px;font-size:14px;text-align:center;" inputmode="numeric" maxlength="6">
+                </div>
+                <div style="display:flex;gap:8px;margin:6px 0;">
+                    <label class="radio-inline"><input type="radio" name="newUserRole" value="pic" checked> PIC</label>
+                    <label class="radio-inline"><input type="radio" name="newUserRole" value="superadmin"> Super Admin</label>
+                </div>
+                <select id="newUserAgen" class="form-control" style="font-size:14px;">
+                    <option value="">Pilih Agen (untuk PIC)</option>
+                </select>
+                <button type="button" id="btnAddUser" class="btn btn-sm btn-primary" style="width:100%;margin-top:6px;"><i class="fas fa-plus"></i> Tambah User</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================ -->
     <!-- SECTION: TAMBAH TIKET -->
     <!-- ================================ -->
-    <section id="sectionForm" class="section active" role="tabpanel">
+    <section id="sectionForm" class="section" role="tabpanel">
         <div class="container">
             <div class="card form-card">
-                <div class="card-title"><i class="fas fa-pen-to-square"></i> Tiket Baru</div>
+                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-pen-to-square"></i> Tiket Baru</div>
                 <form id="formTiket" autocomplete="off">
 
                     <div class="form-grid">
@@ -132,10 +214,17 @@
     <section id="sectionDaftar" class="section" role="tabpanel">
         <div class="container">
             <div class="card">
+                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-ticket"></i> Daftar Tiket</div>
                 <div class="filter-bar">
                     <i class="fas fa-search"></i>
                     <input type="text" id="filterInput" class="form-control" placeholder="Cari tiket, nama, armada...">
                     <button id="filterClear" class="filter-clear" style="display:none;"><i class="fas fa-xmark"></i></button>
+                </div>
+                <div id="agenFilterBar" class="agen-filter-bar" style="display:none;">
+                    <i class="fas fa-store"></i>
+                    <select id="agenFilterTiket" class="form-control" style="font-size:14px;">
+                        <option value="">Semua Agen</option>
+                    </select>
                 </div>
 
                 <div class="tc-uppercase" id="cardActionsWrap">
@@ -157,7 +246,7 @@
         <div class="container">
             <!-- PIN GATE -->
             <div id="laporanPinGate" class="card">
-                <div class="card-title"><i class="fas fa-lock"></i> Masukkan PIN Laporan</div>
+                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-lock"></i> Masukkan PIN Laporan</div>
                 <div class="form-group">
                     <input type="password" id="laporanPinInput" class="form-control" placeholder="Masukkan PIN" inputmode="numeric" maxlength="6">
                 </div>
@@ -168,7 +257,13 @@
             <!-- REPORT CONTENT -->
             <div id="laporanContent" style="display:none;">
                 <div class="card">
-                    <div class="card-title"><i class="fas fa-chart-line"></i> Laporan Keuangan</div>
+                    <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-chart-line"></i> Laporan Keuangan</div>
+                    <div id="agenFilterLaporanBar" class="agen-filter-bar" style="display:none;">
+                        <i class="fas fa-store"></i>
+                        <select id="agenFilterLaporan" class="form-control" style="font-size:14px;">
+                            <option value="">Semua Agen</option>
+                        </select>
+                    </div>
                     <div class="laporan-ringkasan">
                         <div class="laporan-card">
                             <span class="laporan-label">Total Pendapatan</span>
@@ -236,7 +331,7 @@
     <section id="sectionPengaturan" class="section" role="tabpanel">
         <div class="container">
             <div class="card form-card">
-                <div class="card-title"><i class="fas fa-gear"></i> Pengaturan</div>
+                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-gear"></i> Pengaturan</div>
 
                 <div class="form-group">
                     <label for="settingNama">Nama Agen / Pool</label>
@@ -249,8 +344,9 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="settingHp">No. HP Agen</label>
-                    <input type="tel" id="settingHp" class="form-control" placeholder="Contoh: 021-12345678" inputmode="numeric">
+                    <label>No. HP Agen</label>
+                    <div id="hpList"></div>
+                    <button type="button" id="btnAddHp" class="btn btn-sm btn-outline" style="margin-top:6px;width:100%;"><i class="fas fa-plus"></i> Tambah No. HP</button>
                 </div>
 
                 <div class="form-group">
@@ -281,6 +377,46 @@
                     </div>
                 </div>
 
+                <div class="form-group" style="border-top:1px solid var(--border-color);padding-top:16px;">
+                    <label style="margin-bottom:8px;"><i class="fas fa-database"></i> Penyimpanan Data</label>
+                    <div class="radio-group">
+                        <label class="radio-card" id="radioDbDexie">
+                            <input type="radio" name="dbMode" value="dexie" checked>
+                            <i class="fas fa-mobile-screen"></i>
+                            <span class="radio-label">Lokal (IndexedDB)</span>
+                            <small>Offline, data di device ini</small>
+                        </label>
+                        <label class="radio-card" id="radioDbSupabase">
+                            <input type="radio" name="dbMode" value="supabase">
+                            <i class="fas fa-cloud"></i>
+                            <span class="radio-label">Cloud (Supabase)</span>
+                            <small>Online, sync semua device</small>
+                        </label>
+                    </div>
+                    <div id="supabaseFields" style="display:none;margin-top:12px;">
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <label for="settingSupabaseUrl">Supabase URL</label>
+                            <input type="url" id="settingSupabaseUrl" class="form-control" placeholder="Contoh: https://abc.supabase.co">
+                        </div>
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <label for="settingSupabaseKey">Anon Key</label>
+                            <input type="text" id="settingSupabaseKey" class="form-control" placeholder="Anon public key">
+                        </div>
+                        <button type="button" id="btnTestSupabase" class="btn btn-sm btn-outline" style="width:100%;"><i class="fas fa-plug"></i> Uji Koneksi</button>
+                        <span id="supabaseStatus" style="display:inline-block;font-size:13px;margin-top:6px;"></span>
+                    </div>
+                </div>
+
+                <!-- BACKUP / EXPORT -->
+                <div class="form-group" style="border-top:1px solid var(--border-color);padding-top:16px;">
+                    <label style="margin-bottom:8px;"><i class="fas fa-box-archive"></i> Backup & Restore</label>
+                    <button type="button" id="btnExportData" class="btn btn-sm btn-outline" style="width:100%;margin-bottom:6px;"><i class="fas fa-download"></i> Export Semua Tiket (JSON)</button>
+                    <label class="btn btn-sm btn-outline" style="width:100%;text-align:center;cursor:pointer;">
+                        <i class="fas fa-upload"></i> Import Tiket (JSON)
+                        <input type="file" id="fileImport" accept=".json" style="display:none;">
+                    </label>
+                </div>
+
                 <button type="button" id="btnSaveSettings" class="btn btn-primary btn-block"><i class="fas fa-floppy-disk"></i> Simpan Pengaturan</button>
             </div>
         </div>
@@ -301,6 +437,32 @@
             <div class="overlay-footer">
                 <button class="btn btn-outline" onclick="closeConfirm()">Tutup</button>
                 <button class="btn btn-danger" id="confirmYes">Ya</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================ -->
+    <!-- TICKET SAVED OVERLAY -->
+    <!-- ================================ -->
+    <div id="overlaySaved" class="overlay-cetak" style="display:none;">
+        <div class="overlay-content" style="max-width:360px;">
+            <div class="overlay-header">
+                <span><i class="fas fa-check-circle" style="color:var(--success);"></i> Tiket Tersimpan</span>
+                <button onclick="closeSavedOverlay()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="overlay-body" style="flex-direction:column;gap:8px;padding:20px;">
+                <table style="width:100%;font-size:14px;border-collapse:collapse;">
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-hint);white-space:nowrap;">No. Tiket</td><td id="savedNoTiket" style="padding:4px 0;font-weight:600;"></td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-hint);white-space:nowrap;">Penumpang</td><td id="savedNama" style="padding:4px 0;"></td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-hint);white-space:nowrap;">Armada</td><td id="savedArmada" style="padding:4px 0;"></td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-hint);white-space:nowrap;">Rute</td><td id="savedRute" style="padding:4px 0;"></td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-hint);white-space:nowrap;">Kursi</td><td id="savedKursi" style="padding:4px 0;"></td></tr>
+                    <tr><td style="padding:4px 8px 4px 0;color:var(--text-hint);white-space:nowrap;">Harga</td><td id="savedHarga" style="padding:4px 0;font-weight:600;"></td></tr>
+                </table>
+            </div>
+            <div class="overlay-footer" style="gap:8px;">
+                <button class="btn btn-primary" id="savedBtnCetak" style="flex:1;"><i class="fas fa-print"></i> Cetak Tiket</button>
+                <button class="btn btn-outline" id="savedBtnDaftar" style="flex:1;"><i class="fas fa-list"></i> Daftar Tiket</button>
             </div>
         </div>
     </div>
@@ -338,6 +500,7 @@
     <!-- SCRIPTS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
     <script>
         if ((location.protocol === 'https:' || location.protocol === 'http:') && 'serviceWorker' in navigator) {
