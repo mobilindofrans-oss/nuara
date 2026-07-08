@@ -739,6 +739,7 @@ function updateHeader() {
         html += '</p>';
     }
     el.innerHTML = html;
+    document.title = nama;
 }
 
 // ===== LOGIN SYSTEM =====
