@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Loket Bus</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <meta name="theme-color" content="#1565c0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Loket Bus">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <script>
+        if (location.protocol === 'https:' || location.protocol === 'http:') {
+            var m = document.createElement('link');
+            m.rel = 'manifest';
+            m.href = 'manifest.json';
+            document.head.appendChild(m);
+        }
+    </script>
+</head>
+<body>
+
+    <!-- APP BAR -->
+    <header class="app-bar">
+        <div id="headerContent">
+            <h1><i class="fas fa-bus"></i> LOKET BUS</h1>
+            <p>Sistem Tiket Penumpang</p>
+        </div>
+    </header>
+
+    <!-- BOTTOM NAVIGATION -->
+    <nav class="bottom-nav" role="tablist">
+        <button id="tabTambah" class="bottom-nav-btn active" role="tab">
+            <i class="fas fa-plus-circle"></i>
+            <span>Tambah</span>
+        </button>
+        <button id="tabDaftar" class="bottom-nav-btn" role="tab">
+            <i class="fas fa-ticket"></i>
+            <span>Tiket</span>
+        </button>
+        <button id="tabLaporan" class="bottom-nav-btn" role="tab">
+            <i class="fas fa-chart-line"></i>
+            <span>Laporan</span>
+        </button>
+        <button id="tabPengaturan" class="bottom-nav-btn" role="tab">
+            <i class="fas fa-gear"></i>
+            <span>Pengaturan</span>
+        </button>
+    </nav>
+
+    <!-- ================================ -->
+    <!-- SECTION: TAMBAH TIKET -->
+    <!-- ================================ -->
+    <section id="sectionForm" class="section active" role="tabpanel">
+        <div class="container">
+            <div class="card form-card">
+                <div class="card-title"><i class="fas fa-pen-to-square"></i> Tiket Baru</div>
+                <form id="formTiket" autocomplete="off">
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="no_tiket">No. Tiket</label>
+                            <div class="input-group">
+                                <input type="text" id="no_tiket" class="form-control" required readonly>
+                                <button type="button" id="btnGenerateNo" class="btn-gen" title="Generate ulang nomor"><i class="fas fa-arrows-rotate"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="tgl_beli">Tanggal Beli</label>
+                            <input type="datetime-local" id="tgl_beli" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="nama_penumpang">Nama Penumpang</label>
+                            <input type="text" id="nama_penumpang" class="form-control" placeholder="Contoh: Budi Santoso" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="no_hp">No. HP</label>
+                            <input type="tel" id="no_hp" class="form-control" placeholder="081234567890" inputmode="numeric" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="armada">Armada</label>
+                            <input type="text" id="armada" class="form-control" placeholder="Contoh: Bus Eksekutif" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="keberangkatan">Terminal Asal</label>
+                            <input type="text" id="keberangkatan" class="form-control" placeholder="Contoh: Terminal Kampung Rambutan" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="kedatangan">Terminal Tujuan</label>
+                            <input type="text" id="kedatangan" class="form-control" placeholder="Contoh: Terminal Leuwi Panjang" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="no_kursi">No. Kursi</label>
+                            <input type="text" id="no_kursi" class="form-control" placeholder="Contoh: A12" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="harga">Harga (Rp)</label>
+                            <input type="text" id="harga" class="form-control" placeholder="Contoh: Rp. 150.000,-" inputmode="numeric" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="tgl_berangkat">Tanggal Berangkat</label>
+                            <input type="datetime-local" id="tgl_berangkat" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="pic_agen">PIC Agen / Petugas</label>
+                            <input type="text" id="pic_agen" class="form-control" placeholder="Nama petugas" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btnSubmit" class="btn btn-primary btn-block"><i class="fas fa-floppy-disk"></i> Simpan Tiket</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================ -->
+    <!-- SECTION: DAFTAR TIKET -->
+    <!-- ================================ -->
+    <section id="sectionDaftar" class="section" role="tabpanel">
+        <div class="container">
+            <div class="card">
+                <div class="filter-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="filterInput" class="form-control" placeholder="Cari tiket, nama, armada...">
+                    <button id="filterClear" class="filter-clear" style="display:none;"><i class="fas fa-xmark"></i></button>
+                </div>
+
+                <div class="tc-uppercase" id="cardActionsWrap">
+                    <div id="cardTiket"></div>
+                    <div class="pagination-bar" id="paginationBar" style="display:none;">
+                        <button class="btn btn-sm btn-outline" id="pagePrev"><i class="fas fa-chevron-left"></i></button>
+                        <span id="pageInfo">Halaman 1</span>
+                        <button class="btn btn-sm btn-outline" id="pageNext"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================ -->
+    <!-- SECTION: LAPORAN KEUANGAN -->
+    <!-- ================================ -->
+    <section id="sectionLaporan" class="section" role="tabpanel">
+        <div class="container">
+            <!-- PIN GATE -->
+            <div id="laporanPinGate" class="card">
+                <div class="card-title"><i class="fas fa-lock"></i> Masukkan PIN Laporan</div>
+                <div class="form-group">
+                    <input type="password" id="laporanPinInput" class="form-control" placeholder="Masukkan PIN" inputmode="numeric" maxlength="6">
+                </div>
+                <button id="btnLaporanUnlock" class="btn btn-primary btn-block"><i class="fas fa-unlock"></i> Buka Laporan</button>
+                <p style="font-size:12px;color:var(--text-hint);text-align:center;margin:8px 0 0;">Hubungi admin jika lupa PIN</p>
+            </div>
+
+            <!-- REPORT CONTENT -->
+            <div id="laporanContent" style="display:none;">
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-chart-line"></i> Laporan Keuangan</div>
+                    <div class="laporan-ringkasan">
+                        <div class="laporan-card">
+                            <span class="laporan-label">Total Pendapatan</span>
+                            <span class="laporan-value" id="laporanTotal">Rp0</span>
+                        </div>
+                        <div class="laporan-card">
+                            <span class="laporan-label">Tiket Terjual</span>
+                            <span class="laporan-value" id="laporanCount">0</span>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label>Filter Tanggal</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="date" id="laporanTglStart" class="form-control" style="font-size:14px;">
+                            <span style="line-height:44px;">—</span>
+                            <input type="date" id="laporanTglEnd" class="form-control" style="font-size:14px;">
+                        </div>
+                    </div>
+                    <button id="btnLaporanFilter" class="btn btn-sm btn-primary" style="width:100%;"><i class="fas fa-filter"></i> Terapkan Filter</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-title" style="font-size:13px;"><i class="fas fa-bus"></i> Per Armada</div>
+                    <div id="laporanArmadaList"><p style="color:var(--text-hint);font-size:13px;">Belum ada data</p></div>
+                </div>
+
+                <div class="card" style="text-align:center;">
+                    <button id="btnGantiPin" class="btn btn-sm btn-outline"><i class="fas fa-key"></i> Ganti PIN Laporan</button>
+                </div>
+            </div>
+
+            <!-- GANTI PIN OVERLAY (hidden by default) -->
+            <div id="overlayGantiPin" class="overlay-cetak" style="display:none;">
+                <div class="overlay-content" style="max-width:320px;">
+                    <div class="overlay-header">
+                        <span><i class="fas fa-key"></i> Ganti PIN</span>
+                        <button onclick="closeGantiPin()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                    </div>
+                    <div class="overlay-body" style="flex-direction:column;gap:12px;padding:20px;">
+                        <div class="form-group" style="margin:0;">
+                            <label>PIN Lama</label>
+                            <input type="password" id="gantiPinLama" class="form-control" placeholder="PIN saat ini" inputmode="numeric" maxlength="6">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>PIN Baru</label>
+                            <input type="password" id="gantiPinBaru" class="form-control" placeholder="PIN baru (4-6 digit)" inputmode="numeric" maxlength="6">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Konfirmasi PIN Baru</label>
+                            <input type="password" id="gantiPinKonfirm" class="form-control" placeholder="Ulangi PIN baru" inputmode="numeric" maxlength="6">
+                        </div>
+                    </div>
+                    <div class="overlay-footer">
+                        <button class="btn btn-outline" onclick="closeGantiPin()">Tutup</button>
+                        <button class="btn btn-primary" id="btnSimpanPin">Simpan</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================ -->
+    <!-- SECTION: PENGATURAN -->
+    <!-- ================================ -->
+    <section id="sectionPengaturan" class="section" role="tabpanel">
+        <div class="container">
+            <div class="card form-card">
+                <div class="card-title"><i class="fas fa-gear"></i> Pengaturan</div>
+
+                <div class="form-group">
+                    <label for="settingNama">Nama Agen / Pool</label>
+                    <input type="text" id="settingNama" class="form-control" placeholder="Contoh: PO Sinar Jaya">
+                </div>
+
+                <div class="form-group">
+                    <label for="settingAlamat">Alamat</label>
+                    <textarea id="settingAlamat" class="form-control" rows="2" placeholder="Contoh: Jl. Merdeka No. 123, Jakarta"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="settingHp">No. HP Agen</label>
+                    <input type="tel" id="settingHp" class="form-control" placeholder="Contoh: 021-12345678" inputmode="numeric">
+                </div>
+
+                <div class="form-group">
+                    <label>Lebar Kertas Cetak</label>
+                    <div class="radio-group">
+                        <label class="radio-card">
+                            <input type="radio" name="printWidth" value="58" checked>
+                            <i class="fas fa-receipt"></i>
+                            <span class="radio-label">58 mm</span>
+                            <small>Printer thermal kecil</small>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="printWidth" value="80">
+                            <i class="fas fa-receipt"></i>
+                            <span class="radio-label">80 mm</span>
+                            <small>Printer thermal besar</small>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Opsi Cetakan</label>
+                    <div class="toggle-row" id="toggleArsipRow">
+                        <span class="toggle-label">Tampilkan Arsip Agen</span>
+                        <div id="toggleArsip" class="toggle-switch active">
+                            <div class="toggle-track active"><div class="toggle-thumb"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" id="btnSaveSettings" class="btn btn-primary btn-block"><i class="fas fa-floppy-disk"></i> Simpan Pengaturan</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================ -->
+    <!-- CONFIRM OVERLAY -->
+    <!-- ================================ -->
+    <div id="overlayConfirm" class="overlay-cetak">
+        <div class="overlay-content" style="max-width:320px;">
+            <div class="overlay-header">
+                <span id="confirmTitle">Konfirmasi</span>
+                <button onclick="closeConfirm()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="overlay-body" style="justify-content:flex-start;padding:24px 20px;">
+                <p id="confirmMessage" style="font-size:15px;text-align:center;width:100%;margin:0;"></p>
+            </div>
+            <div class="overlay-footer">
+                <button class="btn btn-outline" onclick="closeConfirm()">Tutup</button>
+                <button class="btn btn-danger" id="confirmYes">Ya</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================ -->
+    <!-- TOAST NOTIFICATION -->
+    <!-- ================================ -->
+    <div id="toast" class="toast-notif"></div>
+
+    <!-- ================================ -->
+    <!-- PRINT PREVIEW OVERLAY -->
+    <!-- ================================ -->
+    <div id="overlayCetak" class="overlay-cetak">
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <span><i class="fas fa-print"></i> Preview Cetak</span>
+                <span style="display:flex;gap:6px;">
+                    <button class="overlay-close" onclick="downloadPDF()" title="Download PDF"><i class="fas fa-download"></i></button>
+                    <button onclick="closePreview()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                </span>
+            </div>
+            <div class="overlay-body" id="previewBody"></div>
+            <div class="overlay-footer">
+                <button class="btn btn-outline" onclick="closePreview()">Tutup</button>
+                <button class="btn btn-primary" id="btnConfirmPrint"><i class="fas fa-print"></i> Cetak</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================ -->
+    <!-- PRINT AREA (hidden on screen) -->
+    <!-- ================================ -->
+    <div id="area-cetak-tiket" style="display:none;"></div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ((location.protocol === 'https:' || location.protocol === 'http:') && 'serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js');
+            });
+        }
+    </script>
+</body>
+</html>
