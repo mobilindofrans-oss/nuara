@@ -1,4 +1,4 @@
-const CACHE = 'loket-bus-v2';
+const CACHE = 'loket-bus-v3';
 const FILES = [
   './',
   './index.html',
@@ -27,13 +27,24 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  var url = new URL(e.request.url);
+
+  // API calls ke Supabase — selalu network dulu, jangan di-cache
+  if (url.origin !== self.location.origin) {
+    e.respondWith(
+      fetch(e.request).catch(function () { return caches.match(e.request); })
+    );
+    return;
+  }
+
+  // Static assets — cache-first
   e.respondWith(
-    caches.match(e.request).then(cached =>
-      cached || fetch(e.request).then(res => {
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+    caches.match(e.request).then(function (cached) {
+      return cached || fetch(e.request).then(function (res) {
+        var clone = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(e.request, clone); });
         return res;
-      }).catch(() => cached)
-    )
+      }).catch(function () { return cached; });
+    })
   );
 });
