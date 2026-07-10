@@ -3,7 +3,6 @@
     --primary: #1565c0;
     --primary-dark: #0d47a1;
     --primary-light: #e3f2fd;
-    --secondary: #ff6f00;
     --success: #2e7d32;
     --danger: #c62828;
     --warning: #e65100;
@@ -17,7 +16,6 @@
     --radius-sm: 8px;
     --shadow: 0 2px 8px rgba(0,0,0,0.08);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
-    --bottom-nav-height: 64px;
     --app-bar-height: 68px;
 }
 
@@ -72,12 +70,6 @@ body {
     text-align: center;
 }
 
-.app-bar p i {
-    font-size: 10px;
-    margin-right: 3px;
-    opacity: 0.8;
-}
-
 .header-hp {
     display: flex;
     align-items: center;
@@ -103,7 +95,7 @@ body {
 /* ===== BOTTOM NAVIGATION ===== */
 .bottom-nav {
     position: fixed;
-    bottom: 24px; left: 0; right: 0;
+    bottom: max(24px, env(safe-area-inset-bottom)); left: 0; right: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -390,11 +382,6 @@ textarea.form-control {
 .filter-clear:active { background: #ddd; }
 
 /* ===== TABLE ===== */
-.table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
 table {
     width: 100%;
     border-collapse: collapse;
@@ -671,7 +658,7 @@ tbody tr:active { background: #fafafa; }
 /* ===== TOAST (SNACKBAR ANDROID) ===== */
 .toast-notif {
     position: fixed;
-    bottom: 80px;
+    bottom: max(80px, calc(env(safe-area-inset-bottom) + 56px));
     left: 50%;
     transform: translateX(-50%) translateY(20px);
     background: #323232;
@@ -690,7 +677,7 @@ tbody tr:active { background: #fafafa; }
     display: flex;
     align-items: center;
     gap: 8px;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 .toast-notif.show {
@@ -831,16 +818,12 @@ tbody tr:active { background: #fafafa; }
 .empty-state .btn { margin-left: auto; margin-right: auto; }
 
 /* ===== UPPERCASE DISPLAY ===== */
-.tabel-uppercase td,
-.tabel-uppercase th,
 .tc-uppercase .tc-body .value,
 .tc-uppercase .tc-body .row-item .label,
 .tc-uppercase .tc-no { text-transform: uppercase; }
 
-.tabel-uppercase .badge,
 .tc-uppercase .badge { text-transform: uppercase; letter-spacing: 0.5px; }
 
-.tabel-uppercase td { font-size: 12px; }
 .tc-uppercase .tc-body { font-size: 12px; line-height: 1.6; }
 .tc-uppercase .tc-no { font-size: 15px; }
 
@@ -853,11 +836,16 @@ tbody tr:active { background: #fafafa; }
     .btn { font-size: 14px; padding: 10px 16px; }
 }
 
-@media (min-width: 768px) {
-    .form-grid { grid-template-columns: 1fr 1fr; }
+/* ===== PENUMPANG LIST ===== */
+.penumpang-item {
+    background: var(--card); border: 1px solid var(--divider);
+    border-radius: 12px; padding: 12px; margin-bottom: 8px;
 }
+.header-alamat {
+    font-size: 12px; color: var(--text-secondary); margin: 2px 0;
+}
+.header-alamat i { width: 16px; text-align: center; }
 
-/* ===== PRINT STYLES ===== */
 /* ===== LOGIN OVERLAY ===== */
 .login-user-item {
     display: flex; align-items: center; gap: 12px;
@@ -883,6 +871,35 @@ tbody tr:active { background: #fafafa; }
 }
 .agen-filter-bar select { margin: 0; }
 
+/* ===== DATE FILTER BAR ===== */
+.date-filter-bar {
+    margin-bottom: 8px;
+}
+.date-filter-row {
+    display: flex; align-items: flex-end; gap: 8px;
+}
+.date-filter-item {
+    flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.date-filter-item label {
+    font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;
+}
+.date-filter-item .form-control {
+    font-size: 13px; padding: 6px 8px; height: auto;
+}
+.date-filter-row .btn-outline {
+    flex-shrink: 0; height: 34px; padding: 0 10px; margin-bottom: 0;
+}
+/* ===== TOTAL BAR ===== */
+.total-bar {
+    text-align: right; padding: 8px 4px 12px; font-size: 15px; font-weight: 700;
+    border-bottom: 1px solid var(--divider); margin-bottom: 12px;
+    color: var(--text);
+}
+.total-bar span:first-child {
+    font-weight: 400; color: var(--text-secondary); font-size: 13px;
+}
+
 /* ===== MANAGEMENT LISTS ===== */
 .agen-item, .user-item {
     display: flex; align-items: center; justify-content: space-between;
@@ -899,6 +916,8 @@ tbody tr:active { background: #fafafa; }
 .btn-agen-del:hover,
 .btn-user-del:hover { color: var(--danger); }
 .btn-user-pin:hover { color: var(--primary); }
+.btn-agen-edit:hover,
+.btn-user-edit:hover { color: var(--primary); }
 
 /* ===== RADIO INLINE ===== */
 .radio-inline {
@@ -956,7 +975,7 @@ tbody tr:active { background: #fafafa; }
 @media print {
     @page { size: auto; margin: 0; }
 
-    body { background: #fff; padding: 0; }
+    body { background: #fff; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body * { visibility: hidden; }
 
     #area-cetak-tiket,
