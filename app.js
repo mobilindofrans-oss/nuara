@@ -13,8 +13,22 @@ db.version(2).stores({
 });
 
 async function seedDefaults() {
-    if ((await db.agen.count()) === 0) await db.agen.add({ id: 'AG001', nama: 'Agen Utama', alamat: '', hp: '[]' });
-    if ((await db.users.count()) === 0) await db.users.add({ nama: 'Super Admin', role: 'superadmin', pin: '1234', agen_id: null });
+    var sdb = getAgenDB();
+    var udb = getUserDB();
+    var agenCount = sdb ? (await sdb.getAll()).length : await db.agen.count();
+    var userCount = udb ? (await udb.getAll()).length : await db.users.count();
+    if (agenCount === 0) {
+        var agenData = { id: 'AG001', nama: 'Agen Utama', alamat: '', hp: '[]' };
+        if (sdb) await sdb.add(agenData);
+        var dexExists = await db.agen.get('AG001');
+        if (!dexExists) await db.agen.add(agenData);
+    }
+    if (userCount === 0) {
+        var userData = { nama: 'Super Admin', role: 'superadmin', pin: '1234', agen_id: null };
+        if (udb) await udb.add(userData);
+        var dexUsers = await db.users.toArray();
+        if (!dexUsers.some(function (u) { return u.role === 'superadmin'; })) await db.users.add(userData);
+    }
 }
 
 function getSession() { try { return JSON.parse(sessionStorage.getItem('userSession')) || null; } catch (e) { return null; } }
@@ -22,8 +36,6 @@ function setSession(u) { sessionStorage.setItem('userSession', JSON.stringify(u)
 function clearSession() { sessionStorage.removeItem('userSession'); }
 function isLoggedIn() { return !!getSession(); }
 function isSuperadmin() { var u = getSession(); return u && u.role === 'superadmin'; }
-function myAgenId() { var u = getSession(); return u ? u.agen_id : null; }
-function requireSession() { if (!isLoggedIn()) { showLogin(); return false; } return true; }
 
 let supabaseClient = null;
 
@@ -42,8 +54,7 @@ function getDBMode() {
 }
 
 function isSupabaseReady() {
-    var c = getSupabaseClient();
-    return c && localStorage.getItem('supabaseUrl') && localStorage.getItem('supabaseKey');
+    return !!getSupabaseClient();
 }
 
 // ---- Dexie adapter ----
@@ -92,16 +103,31 @@ const dexieAPI = {
 };
 
 // ---- Supabase adapter ----
+var _sbFallbackShown = false;
+function _sbFallback(errMsg) {
+    if (!_sbFallbackShown) {
+        _sbFallbackShown = true;
+        var msg = 'Supabase gagal, beralih ke lokal.';
+        if (errMsg) msg += ' Error: ' + errMsg;
+        showToast(msg, 'warning');
+    }
+    return 'FALLBACK';
+}
+
 const supabaseAPI = {
     async read(filters) {
         try {
             var c = getSupabaseClient(); if (!c) return dexieAPI.read(filters);
             var q = c.from('tickets').select('*');
             if (filters && filters.agen_id) q = q.eq('agen_id', filters.agen_id);
-            var { data, error } = await q.order('created_at', { ascending: false });
+            var { data, error } = await q.order('no_tiket', { ascending: false });
             if (error) throw error;
             return data;
-        } catch (err) { console.error('Supabase Error:', err); showToast('Gagal membaca data.', 'danger'); return null; }
+        } catch (err) {
+            console.error('Supabase Error:', err);
+            _sbFallback(err.message);
+            return dexieAPI.read(filters);
+        }
     },
     async create(data) {
         try {
@@ -109,7 +135,11 @@ const supabaseAPI = {
             var { error } = await c.from('tickets').insert(data);
             if (error) throw error;
             return { status: 'success' };
-        } catch (err) { console.error('Supabase Error:', err); showToast('Gagal menyimpan data.', 'danger'); return null; }
+        } catch (err) {
+            console.error('Supabase Error:', err);
+            _sbFallback(err.message);
+            return dexieAPI.create(data);
+        }
     },
     async update(no_tiket, field, value) {
         try {
@@ -117,7 +147,11 @@ const supabaseAPI = {
             var { error } = await c.from('tickets').update({ [field]: value }).eq('no_tiket', no_tiket);
             if (error) throw error;
             return { status: 'success' };
-        } catch (err) { console.error('Supabase Error:', err); showToast('Gagal mengupdate data.', 'danger'); return null; }
+        } catch (err) {
+            console.error('Supabase Error:', err);
+            _sbFallback(err.message);
+            return dexieAPI.update(no_tiket, field, value);
+        }
     },
     async delete(no_tiket) {
         try {
@@ -125,15 +159,17 @@ const supabaseAPI = {
             var { error } = await c.from('tickets').delete().eq('no_tiket', no_tiket);
             if (error) throw error;
             return { status: 'success' };
-        } catch (err) { console.error('Supabase Error:', err); showToast('Gagal menghapus data.', 'danger'); return null; }
+        } catch (err) {
+            console.error('Supabase Error:', err);
+            _sbFallback(err.message);
+            return dexieAPI.delete(no_tiket);
+        }
     },
     async dummy(agenId) {
         try {
             var c = getSupabaseClient(); if (!c) return dexieAPI.dummy(agenId);
-            // Hapus semua data tickets dari Supabase
             var { error: delErr } = await c.from('tickets').delete().neq('no_tiket', '');
             if (delErr) throw delErr;
-            // Generate 20 data contoh
             var names = ['BUDI SANTOSO', 'SITI NURHALIZA', 'AJAT ROSADI', 'DEWI LESTARI', 'HENDRA GUNAWAN', 'RINA MARLINA', 'AGUS SUPRIYATNO', 'SARI DEVI', 'TEGUH PRASETYO', 'ANITA KUSUMA', 'DIMAS ARDIANTO', 'RATNA SARI', 'FAJAR NUGROHO', 'MEGA WATI', 'ADI SAPUTRA', 'LINA MARDIANA', 'BAMBANG HERMANTO', 'YUNI ASTUTI', 'EKO PRASETYO', 'SRI WAHYUNI'];
             var armadas = ['PO JASA MARGA', 'PO SUMBER ALAM', 'PO HARYANTO', 'PO BUDI PRIMA', 'PO GARUDA MAS'];
             var terminals = ['PURWAKARTA', 'KAMPUNG RAMBUTAN', 'LEUWI PANJANG', 'CICAHEUM', 'PURABAYA', 'GIWANGAN', 'TIRTONADI', 'TERBOYO', 'BATUJAYA', 'BANJAR'];
@@ -153,12 +189,144 @@ const supabaseAPI = {
             if (insErr) throw insErr;
             return { status: 'success' };
         } catch (err) { console.error('Supabase Error:', err); return { status: 'error', message: err.message }; }
+    },
+    // ---- Agen operations ----
+    agen: {
+        async getAll() {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.agen.toArray();
+                var { data, error } = await c.from('agen').select('*').order('id', { ascending: true });
+                if (error) throw error;
+                return data || [];
+            } catch (err) {
+                console.error('Supabase Agen Error:', err);
+                _sbFallback(err.message);
+                return db.agen.toArray();
+            }
+        },
+        async get(id) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.agen.get(id);
+                var { data, error } = await c.from('agen').select('*').eq('id', id).single();
+                if (error) throw error;
+                return data;
+            } catch (err) {
+                console.error('Supabase Agen Error:', err);
+                _sbFallback(err.message);
+                return db.agen.get(id);
+            }
+        },
+        async add(data) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.agen.add(data);
+                var { error } = await c.from('agen').insert(data);
+                if (error) throw error;
+                return data.id;
+            } catch (err) {
+                console.error('Supabase Agen Error:', err);
+                _sbFallback(err.message);
+                return db.agen.add(data);
+            }
+        },
+        async update(id, data) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.agen.update(id, data);
+                var { error } = await c.from('agen').update(data).eq('id', id);
+                if (error) throw error;
+                return 1;
+            } catch (err) {
+                console.error('Supabase Agen Error:', err);
+                _sbFallback(err.message);
+                return db.agen.update(id, data);
+            }
+        },
+        async delete(id) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.agen.delete(id);
+                var { error } = await c.from('agen').delete().eq('id', id);
+                if (error) throw error;
+            } catch (err) {
+                console.error('Supabase Agen Error:', err);
+                _sbFallback(err.message);
+                return db.agen.delete(id);
+            }
+        }
+    },
+    // ---- Users operations ----
+    users: {
+        async getAll() {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.users.toArray();
+                var { data, error } = await c.from('users').select('*').order('nama', { ascending: true });
+                if (error) throw error;
+                return data || [];
+            } catch (err) {
+                console.error('Supabase Users Error:', err);
+                _sbFallback(err.message);
+                return db.users.toArray();
+            }
+        },
+        async get(id) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.users.get(id);
+                var { data, error } = await c.from('users').select('*').eq('id', id).single();
+                if (error) throw error;
+                return data;
+            } catch (err) {
+                console.error('Supabase Users Error:', err);
+                _sbFallback(err.message);
+                return db.users.get(id);
+            }
+        },
+        async add(data) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.users.add(data);
+                var { data: inserted, error } = await c.from('users').insert(data).select();
+                if (error) throw error;
+                return inserted && inserted[0] ? inserted[0].id : null;
+            } catch (err) {
+                console.error('Supabase Users Error:', err);
+                _sbFallback(err.message);
+                return db.users.add(data);
+            }
+        },
+        async update(id, data) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.users.update(id, data);
+                var { error } = await c.from('users').update(data).eq('id', id);
+                if (error) throw error;
+                return 1;
+            } catch (err) {
+                console.error('Supabase Users Error:', err);
+                _sbFallback(err.message);
+                return db.users.update(id, data);
+            }
+        },
+        async delete(id) {
+            try {
+                var c = getSupabaseClient(); if (!c) return db.users.delete(id);
+                var { error } = await c.from('users').delete().eq('id', id);
+                if (error) throw error;
+            } catch (err) {
+                console.error('Supabase Users Error:', err);
+                _sbFallback(err.message);
+                return db.users.delete(id);
+            }
+        }
     }
 };
 
 // ---- Active adapter selector ----
 function getDB() {
     return getDBMode() === 'supabase' && isSupabaseReady() ? supabaseAPI : dexieAPI;
+}
+
+function getAgenDB() {
+    return getDBMode() === 'supabase' && isSupabaseReady() ? supabaseAPI.agen : null;
+}
+
+function getUserDB() {
+    return getDBMode() === 'supabase' && isSupabaseReady() ? supabaseAPI.users : null;
 }
 
 function buildFilters(opts) {
@@ -186,23 +354,16 @@ const API = {
 };
 
 let allTickets = [];
-let currentTicket = null;
 let laporanAuthed = false;
 let currentPage = 1;
+let penumpangPage = 1;
+let penumpangTotalData = [];
 const perPage = 10;
 
 function getEl(id) { return document.getElementById(id); }
 
 function getCurrentDatetime() {
     const now = new Date();
-    const off = now.getTimezoneOffset();
-    const local = new Date(now.getTime() - off * 60000);
-    return local.toISOString().slice(0, 16);
-}
-
-function getTomorrowDate() {
-    const now = new Date();
-    now.setDate(now.getDate() + 1);
     const off = now.getTimezoneOffset();
     const local = new Date(now.getTime() - off * 60000);
     return local.toISOString().slice(0, 16);
@@ -216,14 +377,23 @@ function formatRupiah(n) {
 function formatTgl(val) {
     if (!val) return '';
     if (typeof val === 'string' && val.includes('T')) {
-        const d = new Date(val);
-        const date = String(d.getDate()).padStart(2, '0') + '/' +
-                     String(d.getMonth() + 1).padStart(2, '0') + '/' +
-                     d.getFullYear();
-        if (d.getHours() || d.getMinutes()) {
+        // Has timezone offset (Supabase timestamptz) — use Date to convert to local
+        if (/[+-]\d{2}:\d{2}$/.test(val) || val.endsWith('Z')) {
+            const d = new Date(val);
+            const date = String(d.getDate()).padStart(2, '0') + '/' +
+                         String(d.getMonth() + 1).padStart(2, '0') + '/' +
+                         d.getFullYear();
             const time = String(d.getHours()).padStart(2, '0') + ':' +
                          String(d.getMinutes()).padStart(2, '0');
             return date + ' ' + time;
+        }
+        // No timezone (Dexie format YYYY-MM-DDTHH:MM) — manual parse
+        const parts = val.split('T');
+        const dp = parts[0].split('-');
+        const date = dp[2] + '/' + dp[1] + '/' + dp[0];
+        const tp = parts[1].split(':');
+        if (tp.length >= 2) {
+            return date + ' ' + tp[0] + ':' + tp[1];
         }
         return date;
     }
@@ -305,10 +475,11 @@ function closeSavedOverlay() { getEl('overlaySaved').style.display = 'none'; _sa
 var menuItems = [
     { id: 'tambah',    icon: 'fa-plus-circle',     title: 'Tambah Tiket',    desc: 'Buat tiket baru',              section: 'sectionForm',       color: '#43a047' },
     { id: 'tiket',     icon: 'fa-ticket',           title: 'Daftar Tiket',    desc: 'Lihat, cari & kelola tiket',   section: 'sectionDaftar',     color: '#1565c0' },
-    { id: 'laporan',   icon: 'fa-chart-line',       title: 'Laporan',         desc: 'Keuangan & statistik',         section: 'sectionLaporan',    color: '#e65100' },
+    { id: 'laporan',   icon: 'fa-chart-line',       title: 'Laporan',         desc: 'Keuangan & statistik',         section: 'sectionLaporan',    color: '#e65100', role: 'superadmin' },
     { id: 'agen',      icon: 'fa-store',            title: 'Kelola Agen',     desc: 'Tambah/hapus cabang',          section: 'sectionAgen',       color: '#6a1b9a', role: 'superadmin' },
     { id: 'user',      icon: 'fa-users',            title: 'Kelola User',     desc: 'Tambah/hapus operator',        section: 'sectionUser',       color: '#00838f', role: 'superadmin' },
-    { id: 'pengaturan',icon: 'fa-gear',             title: 'Pengaturan',      desc: 'Cetak, database & lainnya',    section: 'sectionPengaturan', color: '#546e7a' },
+    { id: 'penumpang', icon: 'fa-address-book',     title: 'Data Penumpang',  desc: 'Lihat data pelanggan',         section: 'sectionPenumpang',  color: '#2e7d32', role: 'superadmin' },
+    { id: 'pengaturan',icon: 'fa-gear',             title: 'Pengaturan',      desc: 'Cetak, database & lainnya',    section: 'sectionPengaturan', color: '#546e7a', role: 'superadmin' },
     { id: 'logout',    icon: 'fa-right-from-bracket', title: 'Logout',        desc: 'Keluar dari akun',             action: 'logout',             color: '#c62828' },
 ];
 
@@ -346,11 +517,11 @@ function showSection(id) {
     var el = getEl(id);
     if (el) el.classList.add('active');
     if (id === 'sectionBeranda') renderMenu();
-    if (id === 'sectionForm') { generateNoTiket(); }
+    if (id === 'sectionForm') { generateNoTiket(); autoFillPic(); }
     if (id === 'sectionDaftar') {
         var user = getSession();
         if (user && user.role === 'superadmin' && getEl('agenFilterTiket').value) loadTicketsWithFilter();
-        else loadTickets().then(function () { renderTickets(); });
+        else loadTickets().then(function () { renderTickets(); }).catch(function (e) { console.error('Load error:', e); });
     }
     if (id === 'sectionLaporan') {
         if (laporanAuthed) { getEl('laporanPinGate').style.display = 'none'; getEl('laporanContent').style.display = ''; renderLaporan(); }
@@ -361,6 +532,14 @@ function showSection(id) {
         var user = getSession();
         if (user && user.role === 'superadmin') { renderAgenList(); renderUserList(); }
     }
+    if (id === 'sectionAgen' && isSuperadmin()) renderAgenList();
+    if (id === 'sectionUser' && isSuperadmin()) renderUserList();
+    if (id === 'sectionPenumpang' && isSuperadmin()) loadTickets().then(function () { renderPenumpang(); }).catch(function (e) { console.error('Load error:', e); });
+}
+
+function autoFillPic() {
+    var user = getSession();
+    if (user) getEl('pic_agen').value = user.nama.toUpperCase();
 }
 
 function goHome() {
@@ -405,41 +584,61 @@ async function handleSubmit(e) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
-    const result = await API.create(data);
+    try {
+        const result = await API.create(data);
 
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Simpan Tiket';
-
-    if (result && result.status === 'success') {
-        showTicketSaved(data);
-        e.target.reset();
-        await generateNoTiket();
-        getEl('tgl_beli').value = getCurrentDatetime();
-        getEl('tgl_berangkat').value = getTomorrowDate();
-        await loadTickets();
-        currentPage = 1;
-        if (getEl('sectionDaftar').classList.contains('active')) {
-            renderTickets();
+        if (result && result.status === 'success') {
+            showTicketSaved(data);
+            e.target.reset();
+            await generateNoTiket();
+            getEl('tgl_beli').value = getCurrentDatetime();
+            getEl('tgl_berangkat').value = getCurrentDatetime();
+            autoFillPic();
+            await loadTickets();
+            currentPage = 1;
+            if (getEl('sectionDaftar').classList.contains('active')) {
+                renderTickets();
+            }
+        } else {
+            showToast('Gagal menyimpan tiket. Coba lagi.', 'danger');
         }
-    } else {
+    } catch (err) {
+        console.error('Submit error:', err);
         showToast('Gagal menyimpan tiket. Coba lagi.', 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Simpan Tiket';
     }
 }
 
 async function loadTickets() {
-    const data = await API.read();
-    if (data) allTickets = data;
+    try {
+        const data = await API.read();
+        if (data) allTickets = data;
+        else allTickets = [];
+    } catch (err) {
+        console.error('loadTickets error:', err);
+        allTickets = [];
+    }
 }
 
 async function loadTicketsWithFilter() {
-    var agenId = getEl('agenFilterTiket').value;
-    var data = agenId ? await API.read({ agen_id: agenId }) : await API.read();
-    if (data) allTickets = data;
-    renderTickets();
+    try {
+        var agenId = getEl('agenFilterTiket').value;
+        var data = agenId ? await API.read({ agen_id: agenId }) : await API.read();
+        if (data) allTickets = data;
+        else allTickets = [];
+        renderTickets();
+    } catch (err) {
+        console.error('loadTicketsWithFilter error:', err);
+        showToast('Gagal memuat data tiket', 'danger');
+    }
 }
 
 function renderTickets() {
     const kw = (getEl('filterInput').value || '').toLowerCase();
+    const startDate = getEl('filterDateStart').value;
+    const endDate = getEl('filterDateEnd').value;
 
     let filtered = allTickets;
     if (kw) {
@@ -451,6 +650,14 @@ function renderTickets() {
             (t.kedatangan && t.kedatangan.toLowerCase().includes(kw))
         );
     }
+    if (startDate) {
+        filtered = filtered.filter(t => t.tgl_beli && t.tgl_beli.slice(0, 10) >= startDate);
+    }
+    if (endDate) {
+        filtered = filtered.filter(t => t.tgl_beli && t.tgl_beli.slice(0, 10) <= endDate);
+    }
+
+    getEl('totalAmount').textContent = filtered.length + ' tiket';
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     if (currentPage > totalPages) currentPage = totalPages;
@@ -507,51 +714,86 @@ function esc(s) {
     return d.innerHTML;
 }
 
+function showSuperPinPrompt(msg) {
+    return new Promise(function (resolve) {
+        getEl('superPinInput').value = '';
+        getEl('superPinError').style.display = 'none';
+        getEl('superPinDesc').textContent = msg || 'Masukkan PIN Super Admin';
+        getEl('overlaySuperPin').style.display = 'flex';
+        getEl('superPinInput').focus();
+        window._resolveSuperPin = resolve;
+    });
+}
+
+function closeSuperPin() {
+    getEl('overlaySuperPin').style.display = 'none';
+    if (window._resolveSuperPin) { var r = window._resolveSuperPin; window._resolveSuperPin = null; r(false); }
+}
+
+var _sessionUserRole = '';
+
 async function cancelTicket(noTiket) {
-    var ok = await showConfirm('Batalkan Tiket', 'Batalkan tiket ' + noTiket + '?', 'Ya, Batalkan', 'btn-warning');
-    if (!ok) return;
-    const r = await API.update(noTiket, 'status', 'batal');
-    if (r && r.status === 'success') {
-        showToast(`Tiket ${noTiket} dibatalkan`, 'success');
-        await loadTickets();
-        currentPage = 1;
-        renderTickets();
+    if (_sessionUserRole === 'pic') {
+        var auth = await showSuperPinPrompt('Batalkan tiket ' + noTiket + '? Masukkan PIN Super Admin');
+        if (!auth) return;
     } else {
+        var ok = await showConfirm('Batalkan Tiket', 'Batalkan tiket ' + noTiket + '?', 'Ya, Batalkan', 'btn-warning');
+        if (!ok) return;
+    }
+    try {
+        const r = await API.update(noTiket, 'status', 'batal');
+        if (r && r.status === 'success') {
+            showToast(`Tiket ${noTiket} dibatalkan`, 'success');
+            await loadTickets();
+            renderTickets();
+        } else {
+            showToast('Gagal membatalkan tiket', 'danger');
+        }
+    } catch (err) {
+        console.error('Cancel error:', err);
         showToast('Gagal membatalkan tiket', 'danger');
     }
 }
 
 async function deleteTicket(noTiket) {
-    var ok = await showConfirm('Hapus Tiket', 'Hapus tiket ' + noTiket + '? Tindakan ini tidak bisa dibatalkan.', 'Ya, Hapus', 'btn-danger');
-    if (!ok) return;
-    const r = await API.delete(noTiket);
-    if (r && r.status === 'success') {
-        showToast(`Tiket ${noTiket} dihapus`, 'success');
-        await loadTickets();
-        currentPage = 1;
-        renderTickets();
-    } else {
-        showToast('Gagal menghapus tiket', 'danger');
-    }
+    try {
+        if (_sessionUserRole === 'pic') {
+            var auth = await showSuperPinPrompt('Hapus tiket ' + noTiket + '? Masukkan PIN Super Admin');
+            if (!auth) return;
+        } else {
+            var ok = await showConfirm('Hapus Tiket', 'Hapus tiket ' + noTiket + '? Tindakan ini tidak bisa dibatalkan.', 'Ya, Hapus', 'btn-danger');
+            if (!ok) return;
+        }
+        const r = await API.delete(noTiket);
+        if (r && r.status === 'success') {
+            showToast('Tiket ' + noTiket + ' dihapus', 'success');
+            await loadTickets();
+            renderTickets();
+        } else {
+            showToast('Gagal menghapus tiket', 'danger');
+        }
+    } catch (e) { console.error('deleteTicket error:', e); showToast('Gagal menghapus tiket', 'danger'); }
 }
 
 async function generateDummy() {
-    var ok = await showConfirm('Isi Data Contoh', 'Semua data yang ada akan dihapus dan diganti 20 data contoh. Lanjutkan?', 'Ya, Lanjutkan', 'btn-primary');
-    if (!ok) return;
+    try {
+        var ok = await showConfirm('Isi Data Contoh', 'Semua data yang ada akan dihapus dan diganti 20 data contoh. Lanjutkan?', 'Ya, Lanjutkan', 'btn-primary');
+        if (!ok) return;
 
-    const btn = document.querySelector('.empty-state .btn');
-    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memuat...'; }
+        const btn = document.querySelector('.empty-state .btn');
+        if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memuat...'; }
 
-    const r = await API.dummy();
-    if (r && r.status === 'success') {
-        showToast('Data contoh berhasil dibuat!', 'success');
-        await loadTickets();
-        currentPage = 1;
-        renderTickets();
-    } else {
-        showToast('Gagal membuat data contoh.', 'danger');
-    }
-    if (btn) { btn.innerHTML = '<i class="fas fa-box-open"></i> Isi Contoh Data'; }
+        const r = await API.dummy();
+        if (r && r.status === 'success') {
+            showToast('Data contoh berhasil dibuat!', 'success');
+            await loadTickets();
+            currentPage = 1;
+            renderTickets();
+        } else {
+            showToast('Gagal membuat data contoh.', 'danger');
+        }
+        if (btn) { btn.innerHTML = '<i class="fas fa-box-open"></i> Isi Contoh Data'; }
+    } catch (e) { console.error('generateDummy error:', e); showToast('Gagal membuat data contoh.', 'danger'); }
 }
 
 let currentPrintNoTiket = null;
@@ -679,7 +921,13 @@ function doPrint(widthClass) {
 function confirmPrint() {
     const t = allTickets.find(x => x.no_tiket === currentPrintNoTiket);
     if (!t) return;
-    getEl('area-cetak-tiket').innerHTML = buildTicketHTML(t);
+    const copies = parseInt(localStorage.getItem('printCopies') || '1');
+    let html = '';
+    for (var i = 0; i < copies; i++) {
+        html += buildTicketHTML(t);
+        if (i < copies - 1) html += '<div class="separator-gunting" style="page-break-after:always;">- - - - - - - - ✂ - - - - - - - -</div>';
+    }
+    getEl('area-cetak-tiket').innerHTML = html;
     closePreview();
     doPrint('print-' + (localStorage.getItem('printWidth') || '58') + 'mm');
 }
@@ -726,14 +974,48 @@ function handleTableClick(e) {
 }
 
 function updateHeader() {
-    const nama = localStorage.getItem('namaAgen') || 'LOKET BUS';
-    const alamat = localStorage.getItem('alamatAgen') || '';
-    const hpList = getHpList();
+    var session = getSession();
+    var nama, alamat, hpList;
+
+    if (!session) {
+        renderHeaderContent('LOKET BUS', '', []);
+        return;
+    }
+
+    if (session.role === 'pic' && session.agen_id) {
+        // PIC: read from agen table
+        var sdb = getAgenDB();
+        (sdb ? sdb.get(session.agen_id) : db.agen.get(session.agen_id)).then(function (a) {
+            if (a) {
+                nama = a.nama;
+                alamat = a.alamat || '';
+                try { hpList = JSON.parse(a.hp || '[]'); } catch (e) { hpList = []; }
+            } else {
+                nama = 'LOKET BUS'; alamat = ''; hpList = [];
+            }
+            renderHeaderContent(nama, alamat, hpList);
+        }).catch(function () {
+            renderHeaderContent('LOKET BUS', '', []);
+        });
+    } else {
+        // Superadmin: static
+        nama = 'Naura Trans';
+        alamat = '';
+        hpList = [];
+        renderHeaderContent(nama, alamat, hpList);
+    }
+}
+
+function renderHeaderContent(nama, alamat, hpList) {
+    // Save to localStorage for print template compatibility
+    localStorage.setItem('namaAgen', nama);
+    localStorage.setItem('alamatAgen', alamat);
+    localStorage.setItem('hpAgen', JSON.stringify(hpList || []));
 
     const el = getEl('headerContent');
     let html = `<h1><i class="fas fa-bus"></i> ${esc(nama)}</h1>`;
     if (alamat) html += `<p class="header-alamat"><i class="fas fa-location-dot"></i> ${esc(alamat)}</p>`;
-    if (hpList.length) {
+    if (hpList && hpList.length) {
         html += '<p class="header-hp">';
         hpList.forEach(function (h, i) {
             if (i > 0) html += '<span class="hp-sep">•</span>';
@@ -762,7 +1044,8 @@ function closeLogin() {
 async function renderLoginUsers() {
     var list = getEl('loginUserList');
     try {
-        var users = await db.users.toArray();
+        var sdb = getUserDB();
+        var users = sdb ? await sdb.getAll() : await db.users.toArray();
         if (!users || !users.length) {
             list.innerHTML = '<p style="color:var(--text-hint);text-align:center;">Belum ada user. Hubungi super admin.</p>';
             return;
@@ -793,13 +1076,15 @@ async function handleLoginSubmit() {
     var errEl = getEl('loginError');
     if (!pin) { errEl.textContent = 'Masukkan PIN'; errEl.style.display = ''; return; }
     try {
-        var user = await db.users.get(userId);
+        var sdb = getUserDB();
+        var user = sdb ? await sdb.get(userId) : await db.users.get(userId);
         if (!user || user.pin !== pin) {
             errEl.textContent = 'PIN salah!'; errEl.style.display = '';
             return;
         }
         errEl.style.display = 'none';
         setSession(user);
+        _sessionUserRole = user.role;
         closeLogin();
         renderMenu();
         getEl('agenFilterBar').style.display = user.role === 'superadmin' ? '' : 'none';
@@ -807,6 +1092,7 @@ async function handleLoginSubmit() {
         if (user.role === 'superadmin') { renderAgenList(); renderUserList(); }
         await loadTickets();
         renderTickets();
+        updateHeader();
         goHome();
         showToast('Selamat datang, ' + user.nama + '!', 'success');
     } catch (e) {
@@ -816,14 +1102,20 @@ async function handleLoginSubmit() {
 
 function doLogout() {
     clearSession();
+    _sessionUserRole = '';
     showLogin();
     allTickets = [];
     renderTickets();
+    updateHeader();
 }
 
 // ===== AGEN MANAGEMENT =====
 async function getAgenList() {
-    try { return await db.agen.toArray(); } catch (e) { return []; }
+    try {
+        var sdb = getAgenDB();
+        if (sdb) return await sdb.getAll();
+        return await db.agen.toArray();
+    } catch (e) { return []; }
 }
 
 async function renderAgenList() {
@@ -833,8 +1125,10 @@ async function renderAgenList() {
     list.innerHTML = agen.map(function (a) {
         return '<div class="agen-item">' +
             '<span><strong>' + esc(a.id) + '</strong> — ' + esc(a.nama) + '</span>' +
+            '<div style="display:flex;gap:4px;">' +
+            '<button class="btn-icon-sm btn-agen-edit" data-agen-id="' + a.id + '" title="Edit"><i class="fas fa-pen-to-square"></i></button>' +
             '<button class="btn-icon-sm btn-agen-del" data-agen-id="' + a.id + '" title="Hapus"><i class="fas fa-trash-can"></i></button>' +
-            '</div>';
+            '</div></div>';
     }).join('');
     // Also update agen filter dropdowns + user management dropdown
     var selects = ['agenFilterTiket', 'agenFilterLaporan', 'newUserAgen'];
@@ -853,9 +1147,19 @@ async function addAgen() {
     var alamat = getEl('newAgenAlamat').value.trim();
     if (!id || !nama) { showToast('ID dan Nama agen wajib diisi!', 'warning'); return; }
     try {
-        var existing = await db.agen.get(id);
-        if (existing) { showToast('ID agen sudah digunakan!', 'warning'); return; }
-        await db.agen.add({ id: id, nama: nama, alamat: alamat, hp: '[]' });
+        var sdb = getAgenDB();
+        if (sdb) {
+            var existing = await sdb.get(id);
+            if (existing) { showToast('ID agen sudah digunakan!', 'warning'); return; }
+            await sdb.add({ id: id, nama: nama, alamat: alamat, hp: '[]' });
+            // Also sync to Dexie for offline fallback
+            var dexExists = await db.agen.get(id);
+            if (!dexExists) await db.agen.add({ id: id, nama: nama, alamat: alamat, hp: '[]' });
+        } else {
+            var existing = await db.agen.get(id);
+            if (existing) { showToast('ID agen sudah digunakan!', 'warning'); return; }
+            await db.agen.add({ id: id, nama: nama, alamat: alamat, hp: '[]' });
+        }
         getEl('newAgenId').value = '';
         getEl('newAgenNama').value = '';
         getEl('newAgenAlamat').value = '';
@@ -868,15 +1172,87 @@ async function removeAgen(agenId) {
     var confirmed = await showConfirm('Hapus Agen', 'Hapus agen ' + agenId + '? Semua tiket agen ini tetap tersimpan (tidak dihapus).', 'Ya, Hapus', 'btn-danger');
     if (!confirmed) return;
     try {
-        await db.agen.delete(agenId);
+        var sdb = getAgenDB();
+        if (sdb) await sdb.delete(agenId);
+        try { await db.agen.delete(agenId); } catch (ex) {}
         await renderAgenList();
         showToast('Agen ' + agenId + ' dihapus.', 'success');
     } catch (e) { showToast('Gagal menghapus agen.', 'danger'); }
 }
 
+async function showAgenEdit(agenId) {
+    try {
+        var sdb = getAgenDB();
+        var a = sdb ? await sdb.get(agenId) : await db.agen.get(agenId);
+        if (!a) { showToast('Agen tidak ditemukan', 'danger'); return; }
+        getEl('editAgenId').value = a.id;
+        getEl('editAgenNama').value = a.nama;
+        getEl('editAgenAlamat').value = a.alamat || '';
+        var hp = [];
+        try { hp = JSON.parse(a.hp || '[]'); } catch (e) {}
+        var container = getEl('editAgenHpList');
+        container.innerHTML = hp.map(function (h) {
+            return '<div class="hp-item"><input type="text" class="form-control" value="' + esc(h) + '" placeholder="No. HP"><button class="btn-hp-del" onclick="removeEditAgenHpItem(this)"><i class="fas fa-xmark"></i></button></div>';
+        }).join('');
+        getEl('overlayAgenEdit').style.display = 'flex';
+    } catch (e) { console.error('showAgenEdit error:', e); showToast('Gagal memuat data agen', 'danger'); }
+}
+
+function closeAgenEdit() {
+    getEl('overlayAgenEdit').style.display = 'none';
+}
+
+function addEditAgenHpItem() {
+    var container = getEl('editAgenHpList');
+    var emptyMsg = container.querySelector('p');
+    if (emptyMsg) emptyMsg.remove();
+    var item = document.createElement('div');
+    item.className = 'hp-item';
+    item.innerHTML = '<input type="text" class="form-control" placeholder="No. HP"><button class="btn-hp-del" onclick="removeEditAgenHpItem(this)"><i class="fas fa-xmark"></i></button>';
+    container.appendChild(item);
+}
+
+function removeEditAgenHpItem(btn) {
+    var item = btn.closest('.hp-item');
+    if (item) item.remove();
+}
+
+function collectEditAgenHpInputs() {
+    var container = getEl('editAgenHpList');
+    var inputs = container.querySelectorAll('.hp-item .form-control');
+    var result = [];
+    inputs.forEach(function (inp) {
+        var v = inp.value.trim();
+        if (v) result.push(v);
+    });
+    return result;
+}
+
+async function saveAgenEdit() {
+    var id = getEl('editAgenId').value;
+    var nama = getEl('editAgenNama').value.trim();
+    var alamat = getEl('editAgenAlamat').value.trim();
+    if (!nama || !alamat) { showToast('Nama dan Alamat wajib diisi!', 'warning'); return; }
+    var hp = collectEditAgenHpInputs();
+    var updateData = { nama: nama, alamat: alamat, hp: JSON.stringify(hp) };
+    try {
+        var sdb = getAgenDB();
+        if (sdb) await sdb.update(id, updateData);
+        await db.agen.update(id, updateData);
+        closeAgenEdit();
+        await renderAgenList();
+        updateHeader();
+        showToast('Agen ' + id + ' berhasil diperbarui!', 'success');
+    } catch (e) { showToast('Gagal menyimpan agen.', 'danger'); }
+}
+
 // ===== USER MANAGEMENT =====
 async function getUserList() {
-    try { return await db.users.toArray(); } catch (e) { return []; }
+    try {
+        var sdb = getUserDB();
+        if (sdb) return await sdb.getAll();
+        return await db.users.toArray();
+    } catch (e) { return []; }
 }
 
 async function renderUserList() {
@@ -887,12 +1263,109 @@ async function renderUserList() {
     (await getAgenList()).forEach(function (a) { agenMap[a.id] = a.nama; });
     list.innerHTML = users.map(function (u) {
         return '<div class="user-item">' +
-            '<span><strong>' + esc(u.nama) + '</strong> — ' + (u.role === 'superadmin' ? 'Super Admin' : 'PIC ' + esc(agenMap[u.agen_id] || u.agen_id)) + '</span>' +
+            '<span><strong>' + esc(u.nama) + '</strong> — ' + (u.role === 'superadmin' ? 'Super Admin' : 'PIC ' + esc(agenMap[u.agen_id] || u.agen_id)) + ' — ' + (u.pin ? '*'.repeat(u.pin.length) : '') + '</span>' +
             '<div style="display:flex;gap:4px;">' +
+            '<button class="btn-icon-sm btn-user-edit" data-user-id="' + u.id + '" title="Edit Nama"><i class="fas fa-pen-to-square"></i></button>' +
             '<button class="btn-icon-sm btn-user-pin" data-user-id="' + u.id + '" title="Ganti PIN"><i class="fas fa-key"></i></button>' +
             (u.role !== 'superadmin' ? '<button class="btn-icon-sm btn-user-del" data-user-id="' + u.id + '" title="Hapus"><i class="fas fa-trash-can"></i></button>' : '') +
             '</div></div>';
     }).join('');
+}
+
+// ===== DATA PENUMPANG =====
+function renderPenumpang() {
+    var list = getEl('penumpangList');
+    if (!list) return;
+    var filter = (getEl('filterPenumpang').value || '').toLowerCase();
+    var passengerMap = {};
+    allTickets.forEach(function (t) {
+        if (t.status === 'batal' && localStorage.getItem('showArsip') === 'false') return;
+        var nama = (t.nama_penumpang || '').trim();
+        if (!nama) return;
+        if (filter && !nama.toLowerCase().includes(filter)) return;
+        if (!passengerMap[nama]) passengerMap[nama] = { nama: nama, hp: t.no_hp || '-', count: 0 };
+        passengerMap[nama].count++;
+    });
+    penumpangTotalData = Object.values(passengerMap).sort(function (a, b) { return b.count - a.count; });
+    if (penumpangTotalData.length === 0) { list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);"><i class="fas fa-users-slash"></i> Tidak ada data penumpang</div>'; return; }
+    var perPage = 10;
+    var totalPages = Math.ceil(penumpangTotalData.length / perPage);
+    if (penumpangPage > totalPages) penumpangPage = totalPages;
+    if (penumpangPage < 1) penumpangPage = 1;
+    var start = (penumpangPage - 1) * perPage;
+    var pageData = penumpangTotalData.slice(start, start + perPage);
+    var html = '<div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary);">Total penumpang: ' + penumpangTotalData.length + '</div>';
+    pageData.forEach(function (p) {
+        html += '<div class="penumpang-item">' +
+            '<div style="display:flex;justify-content:space-between;align-items:start;">' +
+            '<div><strong>' + esc(p.nama) + '</strong><br><small style="color:var(--text-secondary);">HP: ' + esc(p.hp) + '</small></div>' +
+            '<span class="badge" style="background:#e8f5e9;color:#2e7d32;padding:2px 10px;border-radius:12px;font-size:13px;">' + p.count + ' tiket</span>' +
+            '</div></div>';
+    });
+    // Pagination bar
+    if (totalPages > 1) {
+        html += '<div class="pagination-bar">' +
+            '<button class="btn-icon-sm" id="penumpangPagePrev" ' + (penumpangPage <= 1 ? 'disabled' : '') + '><i class="fas fa-chevron-left"></i></button>' +
+            '<span id="penumpangPageInfo" style="font-size:13px;color:var(--text-secondary);">Halaman ' + penumpangPage + ' dari ' + totalPages + '</span>' +
+            '<button class="btn-icon-sm" id="penumpangPageNext" ' + (penumpangPage >= totalPages ? 'disabled' : '') + '><i class="fas fa-chevron-right"></i></button>' +
+            '</div>';
+    }
+    list.innerHTML = html;
+}
+
+function downloadPenumpangCSV() {
+    var map = {};
+    allTickets.forEach(function (t) {
+        var nama = (t.nama_penumpang || '').trim();
+        if (!nama) return;
+        if (!map[nama]) map[nama] = { nama: nama, hp: t.no_hp || '' };
+    });
+    var data = Object.values(map).sort(function (a, b) { return a.nama.localeCompare(b.nama); });
+    if (!data.length) { showToast('Tidak ada data penumpang', 'warning'); return; }
+
+    var csv = '\uFEFFnama,nomor_hp\n';
+    data.forEach(function (p) { csv += '"' + p.nama.replace(/"/g, '""') + '","' + p.hp + '"\n'; });
+
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'data_penumpang.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    showToast('CSV diunduh: ' + data.length + ' penumpang', 'success');
+}
+
+async function showUserEdit(userId) {
+    try {
+        var sdb = getUserDB();
+        var u = sdb ? await sdb.get(userId) : await db.users.get(userId);
+        if (!u) { showToast('User tidak ditemukan', 'danger'); return; }
+        getEl('editUserId').value = u.id;
+        getEl('editUserName').value = u.nama;
+        getEl('overlayUserEdit').style.display = 'flex';
+    } catch (e) { console.error('showUserEdit error:', e); showToast('Gagal memuat data user', 'danger'); }
+}
+
+function closeUserEdit() {
+    getEl('overlayUserEdit').style.display = 'none';
+}
+
+async function saveUserEdit() {
+    var id = parseInt(getEl('editUserId').value);
+    var nama = getEl('editUserName').value.trim();
+    if (!nama) { showToast('Nama wajib diisi!', 'warning'); return; }
+    try {
+        var sdb = getUserDB();
+        if (sdb) await sdb.update(id, { nama: nama });
+        await db.users.update(id, { nama: nama });
+        closeUserEdit();
+        await renderUserList();
+        var session = getSession();
+        if (session && session.id === id) { session.nama = nama; setSession(session); }
+        showToast('User berhasil diperbarui!', 'success');
+    } catch (e) { showToast('Gagal menyimpan user.', 'danger'); }
 }
 
 async function addUser() {
@@ -903,8 +1376,11 @@ async function addUser() {
     if (!nama || !pin) { showToast('Nama dan PIN wajib diisi!', 'warning'); return; }
     if (pin.length < 4 || pin.length > 6) { showToast('PIN harus 4-6 digit!', 'warning'); return; }
     if (role === 'pic' && !agenId) { showToast('Pilih agen untuk role PIC!', 'warning'); return; }
+    var userData = { nama: nama, role: role, pin: pin, agen_id: role === 'pic' ? agenId : null };
     try {
-        await db.users.add({ nama: nama, role: role, pin: pin, agen_id: role === 'pic' ? agenId : null });
+        var sdb = getUserDB();
+        if (sdb) await sdb.add(userData);
+        await db.users.add(userData);
         getEl('newUserName').value = '';
         getEl('newUserPin').value = '';
         await renderUserList();
@@ -916,20 +1392,25 @@ async function removeUser(userId) {
     var confirmed = await showConfirm('Hapus User', 'Hapus user ini?', 'Ya, Hapus', 'btn-danger');
     if (!confirmed) return;
     try {
-        await db.users.delete(userId);
+        var sdb = getUserDB();
+        if (sdb) await sdb.delete(userId);
+        try { await db.users.delete(userId); } catch (ex) {}
         await renderUserList();
         showToast('User dihapus.', 'success');
     } catch (e) { showToast('Gagal menghapus user.', 'danger'); }
 }
 
 async function changeUserPin(userId) {
-    var user = await db.users.get(userId);
-    if (!user) return;
-    getEl('changePinUserId').value = userId;
-    getEl('changePinNama').textContent = user.nama;
-    getEl('changePinNew').value = '';
-    getEl('changePinConfirm').value = '';
-    getEl('overlayChangePin').style.display = 'flex';
+    try {
+        var sdb = getUserDB();
+        var user = sdb ? await sdb.get(userId) : await db.users.get(userId);
+        if (!user) { showToast('User tidak ditemukan', 'danger'); return; }
+        getEl('changePinUserId').value = userId;
+        getEl('changePinNama').textContent = user.nama;
+        getEl('changePinNew').value = '';
+        getEl('changePinConfirm').value = '';
+        getEl('overlayChangePin').style.display = 'flex';
+    } catch (e) { console.error('changeUserPin error:', e); showToast('Gagal memuat data user', 'danger'); }
 }
 
 async function submitChangePin() {
@@ -939,6 +1420,8 @@ async function submitChangePin() {
     if (!baru || baru.length < 4 || baru.length > 6) { showToast('PIN baru harus 4-6 digit!', 'warning'); return; }
     if (baru !== konfirm) { showToast('Konfirmasi PIN tidak cocok!', 'warning'); return; }
     try {
+        var sdb = getUserDB();
+        if (sdb) await sdb.update(userId, { pin: baru });
         await db.users.update(userId, { pin: baru });
         getEl('overlayChangePin').style.display = 'none';
         showToast('PIN berhasil diubah!', 'success');
@@ -948,7 +1431,7 @@ async function submitChangePin() {
 // ===== BACKUP / EXPORT =====
 async function exportData() {
     try {
-        var data = await db.tickets.toArray();
+        var data = await API.read({ all: true });
         if (!data || !data.length) { showToast('Tidak ada data untuk diexport.', 'warning'); return; }
         var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         var url = URL.createObjectURL(blob);
@@ -969,17 +1452,27 @@ async function importData(file) {
         var text = await file.text();
         var data = JSON.parse(text);
         if (!Array.isArray(data) || !data.length) { showToast('File tidak valid atau kosong.', 'warning'); return; }
-        await db.tickets.bulkAdd(data);
-        showToast(data.length + ' tiket berhasil diimport!', 'success');
+        // Ambil semua tiket yang ada untuk cek duplicate
+        var existing = await API.read({ all: true });
+        var existingSet = {};
+        if (existing) existing.forEach(function (t) { if (t.no_tiket) existingSet[t.no_tiket] = true; });
+        var imported = 0;
+        var skipped = 0;
+        for (var i = 0; i < data.length; i++) {
+            var item = data[i];
+            if (!item.no_tiket) continue;
+            if (existingSet[item.no_tiket]) { skipped++; continue; }
+            var r = await API.create(item);
+            if (r && r.status === 'success') imported++;
+            else break; // stop on first real error
+        }
+        showToast(imported + ' tiket diimport' + (skipped ? ' (' + skipped + ' skip duplikat)' : '') + '!', 'success');
         await loadTickets();
         renderTickets();
     } catch (e) { showToast('Gagal import data: ' + e.message, 'danger'); }
 }
 
 function loadSettings() {
-    getEl('settingNama').value = localStorage.getItem('namaAgen') || '';
-    getEl('settingAlamat').value = localStorage.getItem('alamatAgen') || '';
-
     const savedWidth = localStorage.getItem('printWidth') || '58';
     const radio = document.querySelector(`input[name="printWidth"][value="${savedWidth}"]`);
     if (radio) radio.checked = true;
@@ -989,6 +1482,9 @@ function loadSettings() {
     const toggle = getEl('toggleArsip');
     toggle.classList.toggle('active', showArsip);
     toggle.querySelector('.toggle-track').classList.toggle('active', showArsip);
+
+    // Printer settings
+    getEl('printCopies').value = localStorage.getItem('printCopies') || '1';
 
     // DB mode
     const dbMode = localStorage.getItem('dbMode') || 'dexie';
@@ -1002,7 +1498,6 @@ function loadSettings() {
     // Show/hide supabase fields
     getEl('supabaseFields').style.display = dbMode === 'supabase' ? 'block' : 'none';
 
-    renderHpList();
     updateHeader();
 }
 
@@ -1020,69 +1515,14 @@ function getHpList() {
     return old ? [old] : [];
 }
 
-function saveHpList(arr) {
-    localStorage.setItem('hpAgen', JSON.stringify(arr.filter(Boolean)));
-}
-
-function renderHpList() {
-    var list = getHpList();
-    var html = '';
-    list.forEach(function (v, i) {
-        html += '<div class="hp-item">' +
-            '<input type="tel" class="form-control" data-hp-index="' + i + '" value="' + esc(v) + '" placeholder="Contoh: 021-12345678" inputmode="numeric">' +
-            '<button class="btn-hp-del" data-hp-del="' + i + '"><i class="fas fa-trash-can"></i></button>' +
-            '</div>';
-    });
-    if (!html) html = '<p style="color:var(--text-hint);font-size:13px;margin:0 0 6px;">Belum ada nomor HP</p>';
-    getEl('hpList').innerHTML = html;
-}
-
-function addHpItem() {
-    var container = getEl('hpList');
-    var emptyMsg = container.querySelector('p');
-    if (emptyMsg) container.innerHTML = '';
-    var idx = container.querySelectorAll('.hp-item').length;
-    var div = document.createElement('div');
-    div.className = 'hp-item';
-    div.innerHTML = '<input type="tel" class="form-control" placeholder="Contoh: 021-12345678" inputmode="numeric">' +
-        '<button class="btn-hp-del"><i class="fas fa-trash-can"></i></button>';
-    container.appendChild(div);
-    var inp = div.querySelector('.form-control');
-    if (inp) inp.focus();
-}
-
-function removeHpItem(btn) {
-    var item = btn.closest('.hp-item');
-    if (item) item.remove();
-    var container = getEl('hpList');
-    if (!container.querySelector('.hp-item')) {
-        container.innerHTML = '<p style="color:var(--text-hint);font-size:13px;margin:0 0 6px;">Belum ada nomor HP</p>';
-    }
-    collectHpInputs();
-}
-
-function collectHpInputs() {
-    var container = getEl('hpList');
-    var inputs = container.querySelectorAll('.hp-item .form-control');
-    return Array.from(inputs).map(function (inp) { return inp.value.trim(); }).filter(Boolean);
-}
-
 function saveSettings() {
-    const nama = getEl('settingNama').value.trim();
-    const alamat = getEl('settingAlamat').value.trim();
     const width = document.querySelector('input[name="printWidth"]:checked').value;
-
-    if (nama) localStorage.setItem('namaAgen', nama);
-    else localStorage.removeItem('namaAgen');
-    if (alamat) localStorage.setItem('alamatAgen', alamat);
-    else localStorage.removeItem('alamatAgen');
-
-    var hpList = collectHpInputs();
-    saveHpList(hpList);
-
     localStorage.setItem('printWidth', width);
     const showArsip = getEl('toggleArsip').classList.contains('active');
     localStorage.setItem('showArsip', showArsip);
+
+    // Printer settings
+    localStorage.setItem('printCopies', getEl('printCopies').value);
 
     // DB settings
     const dbMode = document.querySelector('input[name="dbMode"]:checked').value;
@@ -1094,7 +1534,6 @@ function saveSettings() {
     supabaseClient = null;
 
     applyPrintWidth(width);
-    renderHpList();
     updateHeader();
 
     showToast('Pengaturan disimpan!', 'success');
@@ -1104,9 +1543,10 @@ function getPin() {
     return localStorage.getItem('laporanPin') || '1234';
 }
 
-function renderLaporan() {
-    const start = getEl('laporanTglStart').value;
-    const end = getEl('laporanTglEnd').value;
+async function renderLaporan() {
+    try {
+        const start = getEl('laporanTglStart').value;
+        const end = getEl('laporanTglEnd').value;
     var agenId = getEl('agenFilterLaporan') ? getEl('agenFilterLaporan').value : '';
 
     let data = allTickets.filter(function (t) { return t.status === 'aktif'; });
@@ -1120,6 +1560,7 @@ function renderLaporan() {
 
     var total = 0;
     var armadaMap = {};
+    var agenMap = {};
     data.forEach(function (t) {
         var h = parseInt(t.harga) || 0;
         total += h;
@@ -1128,11 +1569,35 @@ function renderLaporan() {
             armadaMap[t.armada].count++;
             armadaMap[t.armada].total += h;
         }
+        var aid = t.agen_id || '-';
+        if (!agenMap[aid]) agenMap[aid] = { id: aid, count: 0, total: 0 };
+        agenMap[aid].count++;
+        agenMap[aid].total += h;
     });
 
     getEl('laporanTotal').textContent = formatRupiah(total);
     getEl('laporanCount').textContent = data.length;
 
+    // Render per agen
+    var agenList = await getAgenList();
+    var agenKeys = Object.keys(agenMap);
+    var agenHtml = '';
+    if (agenKeys.length) {
+        agenHtml = agenKeys.map(function (aid) {
+            var a = agenMap[aid];
+            var ag = agenList.find(function (x) { return x.id === aid; });
+            return '<div class="laporan-armada-item">' +
+                '<span class="laporan-armada-nama">' + (ag ? esc(ag.nama) : aid) + '</span>' +
+                '<span class="laporan-armada-jumlah">' + a.count + ' tiket</span>' +
+                '<span class="laporan-armada-total">' + formatRupiah(a.total) + '</span>' +
+                '</div>';
+        }).join('');
+    } else {
+        agenHtml = '<p style="color:var(--text-hint);font-size:13px;">Belum ada data</p>';
+    }
+    getEl('laporanAgenList').innerHTML = agenHtml;
+
+    // Render per armada
     var armadaKeys = Object.keys(armadaMap);
     var armadaHtml = '';
     if (armadaKeys.length) {
@@ -1147,6 +1612,119 @@ function renderLaporan() {
         armadaHtml = '<p style="color:var(--text-hint);font-size:13px;">Belum ada data</p>';
     }
     getEl('laporanArmadaList').innerHTML = armadaHtml;
+    } catch (e) { console.error('renderLaporan error:', e); showToast('Gagal memuat laporan', 'danger'); }
+}
+
+function getHeaderNama() {
+    var user = getSession();
+    if (user && user.role === 'superadmin') return 'NAURA TRANS';
+    return (localStorage.getItem('agenNama') || 'LOKET');
+}
+
+function downloadLaporanPDF() {
+    var start = getEl('laporanTglStart').value;
+    var end = getEl('laporanTglEnd').value;
+    var agenId = getEl('agenFilterLaporan') ? getEl('agenFilterLaporan').value : '';
+    var data = allTickets.filter(function (t) { return t.status === 'aktif'; });
+    if (agenId) data = data.filter(function (t) { return t.agen_id === agenId; });
+    if (start && end) {
+        data = data.filter(function (t) {
+            return t.tgl_beli && t.tgl_beli.slice(0, 10) >= start && t.tgl_beli.slice(0, 10) <= end;
+        });
+    }
+    if (!data.length) { showToast('Tidak ada data untuk periode ini', 'warning'); return; }
+
+    var grandTotal = 0;
+    var armadaMap = {};
+    var agenMap = {};
+    data.forEach(function (t) {
+        var h = parseInt(t.harga) || 0;
+        grandTotal += h;
+        var aid = t.agen_id || '-';
+        if (!agenMap[aid]) agenMap[aid] = { id: aid, count: 0, total: 0 };
+        agenMap[aid].count++;
+        agenMap[aid].total += h;
+        if (t.armada) {
+            if (!armadaMap[t.armada]) armadaMap[t.armada] = { count: 0, total: 0 };
+            armadaMap[t.armada].count++;
+            armadaMap[t.armada].total += h;
+        }
+    });
+
+    showToast('Menyiapkan PDF...', 'info');
+
+    var namaUsaha = getHeaderNama();
+    var now = new Date();
+    var tglCetak = now.toLocaleDateString('id-ID', { year:'numeric', month:'long', day:'numeric' }) + ' ' + now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+    var periode = (start || 'Semua tanggal') + ' s/d ' + (end || 'Semua tanggal');
+
+    var agenKeys = Object.keys(agenMap);
+    var armadaKeys = Object.keys(armadaMap);
+
+    // Build armada rows (don't need agen names)
+    var armadaRows = armadaKeys.map(function (k, i) {
+        var a = armadaMap[k];
+        return '<tr><td style="border:1px solid #ccc;padding:4px;">' + (i+1) + '</td><td style="border:1px solid #ccc;padding:4px;">' + esc(k) + '</td><td style="border:1px solid #ccc;padding:4px;text-align:center;">' + a.count + '</td><td style="border:1px solid #ccc;padding:4px;text-align:right;">' + formatRupiah(a.total) + '</td></tr>';
+    }).join('');
+    armadaRows += '<tr style="font-weight:bold;"><td style="border:1px solid #ccc;padding:4px;" colspan="2">GRAND TOTAL</td><td style="border:1px solid #ccc;padding:4px;text-align:center;">' + data.length + '</td><td style="border:1px solid #ccc;padding:4px;text-align:right;">' + formatRupiah(grandTotal) + '</td></tr>';
+
+    getAgenList().then(function (agenList) {
+        var agenRows = agenKeys.map(function (aid, i) {
+            var a = agenMap[aid];
+            var ag = agenList.find(function (x) { return x.id === aid; });
+            var nm = ag ? ag.nama : (aid === '-' ? 'Tanpa Agen' : aid);
+            return '<tr><td style="border:1px solid #ccc;padding:4px;">' + (i+1) + '</td><td style="border:1px solid #ccc;padding:4px;">' + esc(nm) + '</td><td style="border:1px solid #ccc;padding:4px;text-align:center;">' + a.count + '</td><td style="border:1px solid #ccc;padding:4px;text-align:right;">' + formatRupiah(a.total) + '</td></tr>';
+        }).join('');
+        agenRows += '<tr style="font-weight:bold;"><td style="border:1px solid #ccc;padding:4px;" colspan="2">GRAND TOTAL</td><td style="border:1px solid #ccc;padding:4px;text-align:center;">' + data.length + '</td><td style="border:1px solid #ccc;padding:4px;text-align:right;">' + formatRupiah(grandTotal) + '</td></tr>';
+
+        var html = '<div id="pdf-report" style="font-family:sans-serif;padding:20px;font-size:12px;color:#000;background:#fff;width:700px;">' +
+            '<h2 style="text-align:center;margin:0 0 2px;">LAPORAN KEUANGAN</h2>' +
+            '<h3 style="text-align:center;margin:0 0 2px;font-size:14px;font-weight:normal;">' + esc(namaUsaha) + '</h3>' +
+            '<p style="text-align:center;font-size:10px;color:#666;margin:0 0 10px;">Periode: ' + periode + ' | Cetak: ' + tglCetak + '</p>' +
+            '<hr style="border:0;border-top:2px solid #000;">' +
+            '<table style="width:100%;border-collapse:collapse;margin:8px 0;">' +
+            '<tr><td style="padding:4px 0;"><b>Total Pendapatan:</b></td><td style="text-align:right;padding:4px 0;"><b>' + formatRupiah(grandTotal) + '</b></td></tr>' +
+            '<tr><td style="padding:4px 0;"><b>Total Tiket Terjual:</b></td><td style="text-align:right;padding:4px 0;"><b>' + data.length + ' tiket</b></td></tr>' +
+            '</table>' +
+            '<hr style="border:0;border-top:1px solid #000;">' +
+
+            '<h4 style="margin:10px 0 4px;">RINCIAN PER AGEN</h4>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px;">' +
+            '<tr style="background:#eee;"><th style="border:1px solid #ccc;padding:4px;">No</th><th style="border:1px solid #ccc;padding:4px;">Nama Agen</th><th style="border:1px solid #ccc;padding:4px;text-align:center;">Tiket</th><th style="border:1px solid #ccc;padding:4px;text-align:right;">Pendapatan</th></tr>' +
+            agenRows +
+            '</table>' +
+
+            '<h4 style="margin:10px 0 4px;">RINCIAN PER ARMADA</h4>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
+            '<tr style="background:#eee;"><th style="border:1px solid #ccc;padding:4px;">No</th><th style="border:1px solid #ccc;padding:4px;">Armada</th><th style="border:1px solid #ccc;padding:4px;text-align:center;">Tiket</th><th style="border:1px solid #ccc;padding:4px;text-align:right;">Pendapatan</th></tr>' +
+            armadaRows +
+            '</table>' +
+
+            '<p style="text-align:center;font-size:9px;color:#999;margin-top:15px;">* Laporan digenerate otomatis ' + tglCetak + '</p>' +
+            '</div>';
+
+        var div = document.createElement('div');
+        div.innerHTML = html;
+        document.body.appendChild(div);
+
+        setTimeout(function () {
+            html2pdf(div, {
+                margin: 10,
+                filename: 'Laporan_Keuangan_' + namaUsaha.replace(/\s+/g, '_') + '_' + (start || 'semua') + '.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 1.5, useCORS: true, logging: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).catch(function (e) {
+                console.error('PDF error:', e);
+                showToast('Gagal generate PDF: ' + (e.message || 'unknown'), 'danger');
+            }).then(function () {
+                try { document.body.removeChild(div); } catch (ex) {}
+            });
+        }, 500);
+    }).catch(function (e) {
+        console.error('Error loading agen list:', e);
+        showToast('Gagal memuat data agen', 'danger');
+    });
 }
 
 function closeGantiPin() {
@@ -1159,10 +1737,12 @@ function closeGantiPin() {
 document.addEventListener('DOMContentLoaded', async function () {
     try {
         getEl('tgl_beli').value = getCurrentDatetime();
-        getEl('tgl_berangkat').value = getTomorrowDate();
+        getEl('tgl_berangkat').value = getCurrentDatetime();
         await generateNoTiket();
     } catch (e) { console.error('Init error:', e); }
+    document.querySelectorAll('button:not([type])').forEach(function (b) { b.type = 'button'; });
     loadSettings();
+    autoFillPic();
 
     getEl('tabBeranda').addEventListener('click', function () { goHome(); });
 
@@ -1177,7 +1757,32 @@ document.addEventListener('DOMContentLoaded', async function () {
     getEl('filterClear').addEventListener('click', function () {
         getEl('filterInput').value = '';
         getEl('filterInput').focus();
-        this.style.display = 'none';
+        getEl('filterClear').style.display = 'none';
+        currentPage = 1;
+        renderTickets();
+    });
+
+    // Passenger filter
+    getEl('filterPenumpang').addEventListener('input', function () {
+        penumpangPage = 1;
+        renderPenumpang();
+    });
+    getEl('penumpangList').addEventListener('click', function (e) {
+        var target = e.target.closest('button');
+        if (!target) return;
+        if (target.id === 'penumpangPagePrev' && penumpangPage > 1) { penumpangPage--; renderPenumpang(); }
+        if (target.id === 'penumpangPageNext') {
+            var total = Math.ceil(penumpangTotalData.length / 10);
+            if (penumpangPage < total) { penumpangPage++; renderPenumpang(); }
+        }
+    });
+
+    getEl('btnDownloadCSVPenumpang').addEventListener('click', downloadPenumpangCSV);
+    getEl('filterDateStart').addEventListener('change', function () { currentPage = 1; renderTickets(); });
+    getEl('filterDateEnd').addEventListener('change', function () { currentPage = 1; renderTickets(); });
+    getEl('filterDateClear').addEventListener('click', function () {
+        getEl('filterDateStart').value = '';
+        getEl('filterDateEnd').value = '';
         currentPage = 1;
         renderTickets();
     });
@@ -1211,10 +1816,21 @@ document.addEventListener('DOMContentLoaded', async function () {
             var client = supabase.createClient(url, key);
             var { error } = await client.from('tickets').select('count', { count: 'exact', head: true });
             if (error) throw error;
-            statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Koneksi berhasil!</span>';
-            // store temporarily for save
-            localStorage.setItem('supabaseUrl', url);
-            localStorage.setItem('supabaseKey', key);
+            // Verify required tables exist
+            var tablesOK = true;
+            try {
+                var { error: aErr } = await client.from('agen').select('count', { count: 'exact', head: true });
+                if (aErr) { tablesOK = false; statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-check-circle"></i> Koneksi OK, tapi tabel <b>agen</b> belum ada. Jalankan SQL CREATE TABLE untuk agen, users, dan tickets.</span>'; }
+            } catch (te) { tablesOK = false; }
+            if (tablesOK) {
+                try {
+                    var { error: uErr } = await client.from('users').select('count', { count: 'exact', head: true });
+                    if (uErr) { tablesOK = false; statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-check-circle"></i> Koneksi OK, tapi tabel <b>users</b> belum ada.</span>'; }
+                } catch (te) { tablesOK = false; }
+            }
+            if (tablesOK) {
+                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Koneksi berhasil! Semua tabel tersedia.</span>';
+            }
             supabaseClient = client;
         } catch (err) {
             statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times-circle"></i> Koneksi gagal: ' + esc(err.message) + '</span>';
@@ -1243,6 +1859,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
 
     getEl('btnLaporanFilter').addEventListener('click', renderLaporan);
+    getEl('btnDownloadLaporanPDF').addEventListener('click', downloadLaporanPDF);
     getEl('btnGantiPin').addEventListener('click', function () {
         getEl('overlayGantiPin').style.display = 'flex';
     });
@@ -1269,12 +1886,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     getEl('toggleArsip').addEventListener('click', function () {
         var on = this.classList.toggle('active');
         this.querySelector('.toggle-track').classList.toggle('active', on);
-    });
-
-    getEl('btnAddHp').addEventListener('click', addHpItem);
-    getEl('hpList').addEventListener('click', function (e) {
-        var btn = e.target.closest('.btn-hp-del');
-        if (btn) removeHpItem(btn);
     });
 
     // ===== LOGIN EVENTS =====
@@ -1315,6 +1926,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     getEl('agenList').addEventListener('click', function (e) {
         var btn = e.target.closest('.btn-agen-del');
         if (btn) removeAgen(btn.dataset.agenId);
+        var editBtn = e.target.closest('.btn-agen-edit');
+        if (editBtn) showAgenEdit(editBtn.dataset.agenId);
     });
     getEl('agenFilterTiket').addEventListener('change', function () {
         currentPage = 1;
@@ -1331,6 +1944,8 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (btn) removeUser(parseInt(btn.dataset.userId));
         var pinBtn = e.target.closest('.btn-user-pin');
         if (pinBtn) changeUserPin(parseInt(pinBtn.dataset.userId));
+        var editBtn = e.target.closest('.btn-user-edit');
+        if (editBtn) showUserEdit(parseInt(editBtn.dataset.userId));
     });
     getEl('btnSubmitChangePin').addEventListener('click', submitChangePin);
     getEl('changePinNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') submitChangePin(); });
@@ -1359,11 +1974,44 @@ document.addEventListener('DOMContentLoaded', async function () {
     getEl('overlaySaved').addEventListener('click', function (e) {
         if (e.target === this) closeSavedOverlay();
     });
+    getEl('overlayAgenEdit').addEventListener('click', function (e) {
+        if (e.target === this) closeAgenEdit();
+    });
+    getEl('overlayUserEdit').addEventListener('click', function (e) {
+        if (e.target === this) closeUserEdit();
+    });
+
+    // ===== SUPERADMIN PIN EVENTS =====
+    getEl('btnSuperPinOk').addEventListener('click', async function () {
+        var pin = getEl('superPinInput').value;
+        var sdb = getUserDB();
+        var users = sdb ? await sdb.getAll() : await db.users.where('role').equals('superadmin').toArray();
+        var match = users.some(function (u) { return u.pin === pin; });
+        if (match) {
+            getEl('overlaySuperPin').style.display = 'none';
+            if (window._resolveSuperPin) { var r = window._resolveSuperPin; window._resolveSuperPin = null; r(true); }
+        } else {
+            getEl('superPinError').style.display = '';
+        }
+    });
+    getEl('superPinInput').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') getEl('btnSuperPinOk').click();
+    });
+
+    // ===== AGEN EDIT EVENTS =====
+    getEl('btnEditAgenSave').addEventListener('click', saveAgenEdit);
+    getEl('btnEditAgenAddHp').addEventListener('click', addEditAgenHpItem);
+
+    getEl('editAgenNama').addEventListener('keydown', function (e) { if (e.key === 'Enter') getEl('editAgenAlamat').focus(); });
+
+    // ===== USER EDIT EVENTS =====
+    getEl('btnEditUserSave').addEventListener('click', saveUserEdit);
+    getEl('editUserName').addEventListener('keydown', function (e) { if (e.key === 'Enter') saveUserEdit(); });
 
     // ===== EXPORT/IMPORT EVENTS =====
     getEl('btnExportData').addEventListener('click', exportData);
-    getEl('fileImport').addEventListener('change', function (e) {
-        if (e.target.files && e.target.files[0]) importData(e.target.files[0]);
+    getEl('fileImport').addEventListener('change', async function (e) {
+        if (e.target.files && e.target.files[0]) await importData(e.target.files[0]);
         e.target.value = '';
     });
 
@@ -1373,14 +2021,15 @@ document.addEventListener('DOMContentLoaded', async function () {
         renderMenu();
         var user = getSession();
         if (user) {
+            _sessionUserRole = user.role;
             getEl('agenFilterBar').style.display = user.role === 'superadmin' ? '' : 'none';
             getEl('agenFilterLaporanBar').style.display = user.role === 'superadmin' ? '' : 'none';
             if (user.role === 'superadmin') { renderAgenList(); renderUserList(); }
         }
         if (!isLoggedIn()) {
             showLogin();
-            if (isSuperadmin()) { renderAgenList(); renderUserList(); }
         }
+        updateHeader();
         await loadTickets();
     } catch (e) { console.error('Startup error:', e); }
 });
