@@ -103,12 +103,10 @@ const dexieAPI = {
 };
 
 // ---- Supabase adapter ----
-var _sbFallbackShown = false;
 function _sbFallback(errMsg) {
-    if (!_sbFallbackShown) {
-        _sbFallbackShown = true;
-        var msg = 'Supabase gagal, beralih ke lokal.';
-        if (errMsg) msg += ' Error: ' + errMsg;
+    var mode = getDBMode();
+    var msg = 'Data disimpan secara lokal, tidak ke cloud.';
+    if (mode === 'supabase') {
         showToast(msg, 'warning');
     }
     return 'FALLBACK';
@@ -1813,7 +1811,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
         statusEl.innerHTML = 'Menguji...';
         try {
-            var client = supabase.createClient(url, key);
+            var client = supabase.createClient(url, key, { auth: { persistSession: false } });
             var { error } = await client.from('tickets').select('count', { count: 'exact', head: true });
             if (error) throw error;
             // Verify required tables exist
