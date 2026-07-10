@@ -842,7 +842,7 @@ tbody tr:active { background: #fafafa; }
     border-radius: 12px; padding: 12px; margin-bottom: 8px;
 }
 .header-alamat {
-    font-size: 12px; color: var(--text-secondary); margin: 2px 0;
+    font-size: 12px; color: rgba(255,255,255,0.85); margin: 2px 0;
 }
 .header-alamat i { width: 16px; text-align: center; }
 
