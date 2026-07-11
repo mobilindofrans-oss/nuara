@@ -360,10 +360,12 @@ const perPage = 10;
 function getEl(id) { return document.getElementById(id); }
 
 function getCurrentDatetime() {
-    const now = new Date();
-    const off = now.getTimezoneOffset();
-    const local = new Date(now.getTime() - off * 60000);
-    return local.toISOString().slice(0, 16);
+    var now = new Date();
+    return now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0') + 'T' +
+        String(now.getHours()).padStart(2, '0') + ':' +
+        String(now.getMinutes()).padStart(2, '0');
 }
 
 function formatRupiah(n) {
@@ -1055,6 +1057,11 @@ function renderHeaderContent(nama, alamat, hpList) {
     }
     el.innerHTML = html;
     document.title = nama;
+    // Adjust body padding-top to match dynamic header height
+    setTimeout(function () {
+        var h = getEl('headerContent').offsetHeight;
+        if (h > 0) document.body.style.paddingTop = (h + 16) + 'px';
+    }, 50);
 }
 
 // ===== LOGIN SYSTEM =====
