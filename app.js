@@ -988,7 +988,7 @@ function doPrint(widthClass) {
     const w = localStorage.getItem('printWidth') || '58';
     const style = document.createElement('style');
     style.id = styleId;
-    style.textContent = `@page { size: ${w}mm auto; margin: 0; }`;
+    style.textContent = `@page { size: ${w}mm 5000mm; margin: 0; }`;
     document.head.appendChild(style);
 
     document.body.classList.add(widthClass);
