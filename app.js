@@ -746,7 +746,6 @@ function renderTickets() {
             </div>
             <div class="tc-actions">
                 <button class="btn btn-sm btn-primary" title="Cetak Tiket" data-print="${esc(t.no_tiket)}"><i class="fas fa-print"></i> Cetak</button>
-                <button class="btn btn-sm btn-info" title="Cetak via Bluetooth" data-btprint="${esc(t.no_tiket)}" style="background:#1565c0;"><i class="fab fa-bluetooth-b"></i></button>
                 ${t.status === 'aktif'
                     ? `<button class="btn btn-sm btn-warning" title="Batalkan Tiket" data-cancel="${esc(t.no_tiket)}"><i class="fas fa-ban"></i> Batal</button>`
                     : ''}
@@ -1046,182 +1045,13 @@ function downloadPDF() {
     }, 200);
 }
 
-// ---- Bluetooth Printer ----
-function buildESCPOS(t) {
-    var namaAgen = localStorage.getItem('namaAgen') || 'NAURA TRANS';
-    var alamatAgen = localStorage.getItem('alamatAgen') || '';
-    var hpAgenList = getHpList();
-    var E = 0x1B, G = 0x1D;
-    var b = [];
-
-    function add() { for (var i = 0; i < arguments.length; i++) b.push(arguments[i]); }
-    function txt(s) {
-        if (!s) return;
-        for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); b.push(c <= 0x7F ? c : 0x20); }
-    }
-    function bold(on) { add(E, 0x45, on ? 0x01 : 0x00); }
-    function center() { add(E, 0x61, 0x01); }
-    function left() { add(E, 0x61, 0x00); }
-    function line(c) { txt(c || '='); add(0x0A); }
-    function sep() { txt('================================'); add(0x0A); }
-    function nl() { add(0x0A); }
-    function pad(v, len) { v = String(v); while (v.length < len) v += ' '; return v; }
-
-    add(E, 0x40);                     // Init
-    center();
-    add(G, 0x21, 0x11);              // Double w+h
-    txt(namaAgen); nl();
-    add(G, 0x21, 0x00);              // Normal
-    if (alamatAgen) { txt(alamatAgen); nl(); }
-    if (hpAgenList.length) { txt('HP: ' + hpAgenList.join(' / ')); nl(); }
-    sep();
-
-    bold(true);
-    txt('No Tiket : ' + t.no_tiket); nl();
-    txt('Tgl Beli : ' + formatTgl(t.tgl_beli)); nl();
-    bold(false);
-    sep();
-
-    txt('PENUMPANG : ' + (t.nama_penumpang || '').toUpperCase()); nl();
-    sep();
-
-    txt(pad('Armada', 12) + ': ' + (t.armada || '').toUpperCase()); nl();
-    txt(pad('Dari', 12) + ': ' + (t.keberangkatan || '').toUpperCase()); nl();
-    txt(pad('Tujuan', 12) + ': ' + (t.kedatangan || '').toUpperCase()); nl();
-    txt(pad('Kursi', 12) + ': ' + (t.no_kursi || '').toUpperCase()); nl();
-    sep();
-
-    center();
-    txt('HARGA: ' + formatRupiah(t.harga)); nl();
-    left();
-    txt(pad('Berangkat', 12) + ': ' + formatTgl(t.tgl_berangkat)); nl();
-    txt(pad('PIC Agen', 12) + ': ' + (t.pic_agen || '').toUpperCase()); nl();
-    sep();
-
-    center();
-    txt('TERIMA KASIH'); nl();
-    txt('- ' + namaAgen.toUpperCase() + ' -'); nl();
-    nl();
-
-    add(G, 0x56, 0x00);              // Cut
-    var result = new Uint8Array(b);
-
-    // Trim trailing newlines
-    var end = result.length;
-    while (end > 0 && result[end - 1] === 0x0A) end--;
-    return result.slice(0, end + 1);
-}
-
-async function _btTryReconnect() {
-    if (!navigator.bluetooth.getDevices) return null;
-    var saved = JSON.parse(localStorage.getItem('btPrinterId') || 'null');
-    if (!saved) return null;
-    var devices = await navigator.bluetooth.getDevices();
-    for (var d = 0; d < devices.length; d++) {
-        if (devices[d].id === saved || devices[d].name === saved) return devices[d];
-    }
-    return null;
-}
-
-async function _btConnectDevice(device) {
-    showToast('Menghubungkan ke ' + (device.name || 'Printer') + '...', 'info');
-    var server = await device.gatt.connect();
-    var chars = null;
-
-    var srvUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '0000ff02-0000-1000-8000-00805f9b34fb',
-        '0000ab00-0000-1000-8000-00805f9b34fb',
-        '0000fff0-0000-1000-8000-00805f9b34fb'
-    ];
-    for (var si = 0; si < srvUUIDs.length; si++) {
-        try {
-            var svc = await server.getPrimaryService(srvUUIDs[si]);
-            chars = await svc.getCharacteristics();
-            for (var ci = 0; ci < chars.length; ci++) {
-                if (chars[ci].properties.write || chars[ci].properties.writeWithoutResponse) {
-                    localStorage.setItem('btPrinterId', JSON.stringify(device.id || device.name));
-                    return { server: server, char: chars[ci] };
-                }
-            }
-        } catch (e) {}
-    }
-
-    // Fallback: semua service
-    var all = await server.getPrimaryServices();
-    for (var si2 = 0; si2 < all.length; si2++) {
-        var c2 = await all[si2].getCharacteristics();
-        for (var ci2 = 0; ci2 < c2.length; ci2++) {
-            if (c2[ci2].properties.write || c2[ci2].properties.writeWithoutResponse) {
-                localStorage.setItem('btPrinterId', JSON.stringify(device.id || device.name));
-                return { server: server, char: c2[ci2] };
-            }
-        }
-    }
-
-    server.disconnect();
-    return null;
-}
-
-async function bluetoothPrintTicket(noTiket) {
-    if (!navigator.bluetooth) { showToast('Browser tidak mendukung Bluetooth', 'danger'); return; }
-    var t = allTickets.find(function (x) { return x.no_tiket === noTiket; });
-    if (!t) { showToast('Data tiket tidak ditemukan', 'danger'); return; }
-
-    var btn = document.querySelector('[data-btprint="' + noTiket + '"]') || document.getElementById('btnBluetoothPrint');
-    var origHtml, disabled = false;
-    if (btn) { origHtml = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; btn.disabled = true; disabled = true; }
-
-    try {
-        // Coba sambung ulang ke printer yg sudah pernah dipairing
-        var device = await _btTryReconnect();
-
-        if (!device) {
-            device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: [
-                    '000018f0-0000-1000-8000-00805f9b34fb',
-                    '0000ff02-0000-1000-8000-00805f9b34fb',
-                    '0000ab00-0000-1000-8000-00805f9b34fb',
-                    '0000fff0-0000-1000-8000-00805f9b34fb'
-                ]
-            });
-        }
-
-        var conn = await _btConnectDevice(device);
-        if (!conn) { showToast('Tidak ditemukan port cetak pada printer', 'danger'); return; }
-
-        var data = buildESCPOS(t);
-        showToast('Mencetak... (' + data.length + ' bytes)', 'info');
-        for (var i = 0; i < data.length; i += 20) {
-            await conn.char.writeValue(data.slice(i, i + 20));
-            await new Promise(function (r) { setTimeout(r, 30); });
-        }
-
-        showToast('Tiket berhasil dicetak via Bluetooth', 'success');
-        setTimeout(function () { try { conn.server.disconnect(); } catch (e) {} }, 300);
-    } catch (err) {
-        if (err.name === 'NotFoundError') {
-            showToast('Printer tidak ditemukan. Nyalakan ulang printer, lalu coba lagi.', 'warning');
-        } else {
-            var msg = (err.message || '').toLowerCase();
-            if (msg.indexOf('adapter') > -1 || msg.indexOf('bluetooth not') > -1)
-                showToast('Bluetooth tidak tersedia di perangkat ini', 'warning');
-            else { console.error('Bluetooth Error:', err); showToast('Gagal: ' + err.message, 'danger'); }
-        }
-    }
-
-    if (btn && disabled) { btn.innerHTML = origHtml; btn.disabled = false; }
-}
-
 function handleTableClick(e) {
     const target = e.target.closest('button');
     if (!target) return;
 
-    const noTiket = target.dataset.print || target.dataset.btprint || target.dataset.cancel || target.dataset.delete;
+    const noTiket = target.dataset.print || target.dataset.cancel || target.dataset.delete;
 
-    if (target.dataset.btprint) bluetoothPrintTicket(noTiket);
-    else if (target.dataset.print) printTicket(noTiket);
+    if (target.dataset.print) printTicket(noTiket);
     else if (target.dataset.cancel) cancelTicket(noTiket);
     else if (target.dataset.delete) deleteTicket(noTiket);
 }
@@ -2122,10 +1952,6 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     getEl('toast').addEventListener('click', function () { this.classList.remove('show'); });
     getEl('btnConfirmPrint').addEventListener('click', confirmPrint);
-    getEl('btnBluetoothPrint').addEventListener('click', function () {
-        if (currentPrintNoTiket) bluetoothPrintTicket(currentPrintNoTiket);
-    });
-
     getEl('btnLaporanUnlock').addEventListener('click', function () {
         var pin = getEl('laporanPinInput').value;
         if (pin === getPin()) {
