@@ -632,12 +632,12 @@ tbody tr:active { background: #fafafa; }
 .preview-ticket-wrap .separator-gunting { padding: 0 3mm; }
 .preview-ticket-wrap .separator-gunting::before,
 .preview-ticket-wrap .separator-gunting::after { border-top-color: #555; }
-.preview-ticket-wrap h3 { font-size: 15px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; margin: 1.5mm 0 1mm; }
-.preview-ticket-wrap h4 { font-size: 13px; font-weight: bold; text-align: center; margin: 0 0 1.5mm; }
+.preview-ticket-wrap h3 { font-size: 17px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; margin: 1.5mm 0 1mm; }
+.preview-ticket-wrap h4 { font-size: 15px; font-weight: bold; text-align: center; margin: 0 0 1.5mm; }
 .preview-ticket-wrap hr { border: none; border-top: 2px dashed #888; margin: 1mm 0; }
 .preview-ticket-wrap p { margin: 0.5mm 0; font-size: inherit; }
 .preview-ticket-wrap .text-center { text-align: center; }
-.preview-ticket-wrap .arsip-watermark { text-align: center; font-weight: bold; font-size: 13px; margin: 1.5mm 0; letter-spacing: 3px; border: 2px dashed #888; padding: 0.7mm; }
+.preview-ticket-wrap .arsip-watermark { text-align: center; font-weight: bold; font-size: 15px; margin: 1.5mm 0; letter-spacing: 3px; border: 2px dashed #888; padding: 0.7mm; }
 
 /* ===== SCISSORS SEPARATOR ===== */
 .separator-gunting {
@@ -990,8 +990,8 @@ tbody tr:active { background: #fafafa; }
         background: #fff;
     }
 
-    body.print-58mm #area-cetak-tiket { width: 58mm; padding: 2mm 3mm; font-size: 12px; }
-    body.print-80mm #area-cetak-tiket { width: 80mm; padding: 3mm 5mm; font-size: 13px; }
+    body.print-58mm #area-cetak-tiket { width: 58mm; padding: 2mm 3mm; font-size: 14px; }
+    body.print-80mm #area-cetak-tiket { width: 80mm; padding: 3mm 5mm; font-size: 15px; }
 
     .bagian-tiket { padding-bottom: 1.5mm; margin-bottom: 0; page-break-inside: avoid; }
 
@@ -1000,14 +1000,14 @@ tbody tr:active { background: #fafafa; }
     .bagian-tiket h3, .bagian-tiket h4, .bagian-tiket p, .bagian-tiket hr,
     .bagian-tiket ol, .bagian-tiket div { page-break-inside: avoid; }
 
-    .bagian-tiket h3 { font-size: 15px; font-weight: bold; text-align: center; margin: 1.5mm 0 1mm; text-transform: uppercase; letter-spacing: 1px; }
-    .bagian-tiket h4 { font-size: 13px; font-weight: bold; text-align: center; margin: 0 0 1.5mm; }
+    .bagian-tiket h3 { font-size: 17px; font-weight: bold; text-align: center; margin: 1.5mm 0 1mm; text-transform: uppercase; letter-spacing: 1px; }
+    .bagian-tiket h4 { font-size: 15px; font-weight: bold; text-align: center; margin: 0 0 1.5mm; }
     .bagian-tiket hr { border: none; border-top: 2px dashed #000; margin: 1mm 0; }
     .bagian-tiket p { margin: 0.5mm 0; font-size: inherit; }
     .bagian-tiket .row-print { display: flex; justify-content: space-between; }
     .bagian-tiket .text-center { text-align: center; }
     .bagian-tiket .text-right { text-align: right; }
-    .bagian-tiket .arsip-watermark { text-align: center; font-weight: bold; font-size: 13px; margin: 1.5mm 0; letter-spacing: 3px; border: 2px dashed #000; padding: 0.7mm; }
+    .bagian-tiket .arsip-watermark { text-align: center; font-weight: bold; font-size: 15px; margin: 1.5mm 0; letter-spacing: 3px; border: 2px dashed #000; padding: 0.7mm; }
 
     .app-bar, .bottom-nav, .section:not(#sectionDaftar),
     .overlay-cetak, .toast-notif { display: none !important; }
