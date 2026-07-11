@@ -1,4 +1,4 @@
-const db = new Dexie('tiketBus');
+const db = new Dexie('NauraTrans');
 db.version(1).stores({
     tickets: 'no_tiket, tgl_beli, nama_penumpang, armada, status'
 });
