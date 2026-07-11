@@ -746,6 +746,7 @@ function renderTickets() {
             </div>
             <div class="tc-actions">
                 <button class="btn btn-sm btn-primary" title="Cetak Tiket" data-print="${esc(t.no_tiket)}"><i class="fas fa-print"></i> Cetak</button>
+                <button class="btn btn-sm btn-info" title="Cetak via Bluetooth" data-btprint="${esc(t.no_tiket)}" style="background:#1565c0;"><i class="fab fa-bluetooth-b"></i></button>
                 ${t.status === 'aktif'
                     ? `<button class="btn btn-sm btn-warning" title="Batalkan Tiket" data-cancel="${esc(t.no_tiket)}"><i class="fas fa-ban"></i> Batal</button>`
                     : ''}
@@ -876,16 +877,16 @@ function buildTicketHTML(t) {
     const hpAgenList = getHpList();
 
     let headerInfo = `<h3 style="font-weight:700">${up(namaAgen)}</h3>`;
-    if (alamatAgen) headerInfo += `<p class="text-center" style="font-weight:700;font-size:8px;margin:0.5mm 0;">${up(alamatAgen)}</p>`;
+    if (alamatAgen) headerInfo += `<p class="text-center" style="font-weight:700;font-size:10px;margin:0.5mm 0;">${up(alamatAgen)}</p>`;
     hpAgenList.forEach(function (h) {
-        if (h) headerInfo += `<p class="text-center" style="font-weight:700;font-size:8px;margin:0.5mm 0;">📞 ${esc(h)}</p>`;
+        if (h) headerInfo += `<p class="text-center" style="font-weight:700;font-size:10px;margin:0.5mm 0;">📞 ${esc(h)}</p>`;
     });
 
     const f = (label, val) =>
-        `<p style="margin:0;">${label} :</p><p style="font-weight:700;margin:0 0 2px 0;">${val}</p>`;
+        `<p style="font-weight:700;margin:0;">${label} :</p><p style="font-weight:700;margin:0 0 2px 0;">${val}</p>`;
 
     const rules =
-        `<ol style="margin:0;padding-left:14px;font-weight:700;font-size:7.5px;line-height:1.4;">` +
+        `<ol style="margin:0;padding-left:14px;font-weight:700;font-size:9px;line-height:1.4;">` +
         `<li style="margin:0 0 2px 0;">Apabila batal uang pesanan tidak bisa dikembalikan atau hangus</li>` +
         `<li style="margin:0;">Para penumpang harus siap (stand by) setengah jam sebelum pemberangkatan dan bilamana datang terlambat pada jam tersebut diatas terpaksa kami tinggal dan uang tidak dapat dikembalikan.</li>` +
         `</ol>`;
@@ -919,7 +920,7 @@ function buildTicketHTML(t) {
             ${rules}
             <hr>
             <p class="text-center" style="font-weight:700;">TERIMA KASIH</p>
-            <p class="text-center" style="font-weight:700;font-size:8px;">— ${up(namaAgen)} —</p>
+            <p class="text-center" style="font-weight:700;font-size:10px;">— ${up(namaAgen)} —</p>
         </div>
 
         ${localStorage.getItem('showVoucher') !== 'false' ? `
@@ -1045,13 +1046,157 @@ function downloadPDF() {
     }, 200);
 }
 
+// ---- Bluetooth Printer ----
+function buildESCPOS(t) {
+    var namaAgen = localStorage.getItem('namaAgen') || 'NAURA TRANS';
+    var alamatAgen = localStorage.getItem('alamatAgen') || '';
+    var hpAgenList = getHpList();
+    var E = 0x1B, G = 0x1D;
+    var b = [];
+
+    function add() { for (var i = 0; i < arguments.length; i++) b.push(arguments[i]); }
+    function txt(s) {
+        if (!s) return;
+        for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); b.push(c <= 0x7F ? c : 0x20); }
+    }
+    function bold(on) { add(E, 0x45, on ? 0x01 : 0x00); }
+    function center() { add(E, 0x61, 0x01); }
+    function left() { add(E, 0x61, 0x00); }
+    function line() { txt('================================'); add(0x0A); }
+    function nl() { add(0x0A); }
+
+    add(E, 0x40);                     // Init
+    center();
+    add(G, 0x21, 0x11);              // Double w+h
+    txt(namaAgen); nl();
+    add(G, 0x21, 0x00);              // Normal
+    if (alamatAgen) { txt(alamatAgen); nl(); }
+    hpAgenList.forEach(function (h) { if (h) { txt('HP: ' + h); nl(); } });
+    nl(); line();
+
+    left(); bold(true);
+    txt('No Tiket : ' + t.no_tiket); nl();
+    txt('Tgl Beli : ' + formatTgl(t.tgl_beli)); nl();
+    bold(false);
+    nl(); line();
+
+    bold(true);
+    txt('Penumpang : ' + (t.nama_penumpang || '').toUpperCase()); nl();
+    bold(false);
+    nl(); line();
+
+    txt('Armada          : ' + (t.armada || '').toUpperCase()); nl();
+    txt('Keberangkatan   : ' + (t.keberangkatan || '').toUpperCase()); nl();
+    txt('Terminal Tujuan : ' + (t.kedatangan || '').toUpperCase()); nl();
+    txt('Kursi           : ' + (t.no_kursi || '').toUpperCase()); nl();
+    nl(); line();
+
+    center(); bold(true);
+    add(G, 0x21, 0x11);
+    txt('HARGA: ' + formatRupiah(t.harga)); nl();
+    add(G, 0x21, 0x00);
+    bold(false); left();
+    nl();
+
+    txt('Berangkat : ' + formatTgl(t.tgl_berangkat)); nl();
+    txt('PIC Agen  : ' + (t.pic_agen || '').toUpperCase()); nl();
+    nl(); line();
+
+    center();
+    txt('TERIMA KASIH'); nl();
+    txt('--- ' + namaAgen.toUpperCase() + ' ---'); nl();
+    nl(); nl(); nl();
+
+    add(G, 0x56, 0x00);              // Cut
+    return new Uint8Array(b);
+}
+
+async function bluetoothPrintTicket(noTiket) {
+    if (!navigator.bluetooth) { showToast('Browser tidak mendukung Bluetooth', 'danger'); return; }
+    var t = allTickets.find(function (x) { return x.no_tiket === noTiket; });
+    if (!t) { showToast('Data tiket tidak ditemukan', 'danger'); return; }
+
+    try {
+        showToast('Pilih printer Bluetooth...', 'info');
+        var device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [
+                '000018f0-0000-1000-8000-00805f9b34fb',
+                '0000ff02-0000-1000-8000-00805f9b34fb',
+                '0000ab00-0000-1000-8000-00805f9b34fb',
+                '0000fff0-0000-1000-8000-00805f9b34fb'
+            ]
+        });
+
+        showToast('Menghubungkan ke ' + (device.name || 'Printer') + '...', 'info');
+        var server = await device.gatt.connect();
+        var characteristic = null;
+
+        // Try known service UUIDs
+        var srvUUIDs = [
+            '000018f0-0000-1000-8000-00805f9b34fb',
+            '0000ff02-0000-1000-8000-00805f9b34fb',
+            '0000ab00-0000-1000-8000-00805f9b34fb',
+            '0000fff0-0000-1000-8000-00805f9b34fb'
+        ];
+        for (var si = 0; si < srvUUIDs.length; si++) {
+            try {
+                var svc = await server.getPrimaryService(srvUUIDs[si]);
+                var chars = await svc.getCharacteristics();
+                for (var ci = 0; ci < chars.length; ci++) {
+                    if (chars[ci].properties.write || chars[ci].properties.writeWithoutResponse) {
+                        characteristic = chars[ci]; break;
+                    }
+                }
+            } catch (e) {}
+            if (characteristic) break;
+        }
+
+        // Fallback: scan all services
+        if (!characteristic) {
+            var allSvcs = await server.getPrimaryServices();
+            for (var si2 = 0; si2 < allSvcs.length; si2++) {
+                var chars2 = await allSvcs[si2].getCharacteristics();
+                for (var ci2 = 0; ci2 < chars2.length; ci2++) {
+                    if (chars2[ci2].properties.write || chars2[ci2].properties.writeWithoutResponse) {
+                        characteristic = chars2[ci2]; break;
+                    }
+                }
+                if (characteristic) break;
+            }
+        }
+
+        if (!characteristic) {
+            showToast('Tidak ditemukan port cetak pada printer', 'danger');
+            server.disconnect(); return;
+        }
+
+        var data = buildESCPOS(t);
+        var chunk = 100;
+        for (var i = 0; i < data.length; i += chunk) {
+            await characteristic.writeValue(data.slice(i, i + chunk));
+        }
+
+        showToast('Tiket berhasil dicetak via Bluetooth', 'success');
+        setTimeout(function () { try { server.disconnect(); } catch (e) {} }, 500);
+    } catch (err) {
+        var msg = (err.message || '').toLowerCase();
+        if (msg.indexOf('adapter') > -1 || msg.indexOf('bluetooth not') > -1 || msg.indexOf('no bluetooth') > -1)
+            showToast('Bluetooth tidak tersedia di perangkat ini', 'warning');
+        else if (err.name === 'NotFoundError')
+            showToast('Pemilihan printer dibatalkan', 'warning');
+        else { console.error('Bluetooth Error:', err); showToast('Gagal: ' + err.message, 'danger'); }
+    }
+}
+
 function handleTableClick(e) {
     const target = e.target.closest('button');
     if (!target) return;
 
-    const noTiket = target.dataset.print || target.dataset.cancel || target.dataset.delete;
+    const noTiket = target.dataset.print || target.dataset.btprint || target.dataset.cancel || target.dataset.delete;
 
-    if (target.dataset.print) printTicket(noTiket);
+    if (target.dataset.btprint) bluetoothPrintTicket(noTiket);
+    else if (target.dataset.print) printTicket(noTiket);
     else if (target.dataset.cancel) cancelTicket(noTiket);
     else if (target.dataset.delete) deleteTicket(noTiket);
 }
@@ -1952,6 +2097,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     getEl('toast').addEventListener('click', function () { this.classList.remove('show'); });
     getEl('btnConfirmPrint').addEventListener('click', confirmPrint);
+    getEl('btnBluetoothPrint').addEventListener('click', function () {
+        if (currentPrintNoTiket) bluetoothPrintTicket(currentPrintNoTiket);
+    });
 
     getEl('btnLaporanUnlock').addEventListener('click', function () {
         var pin = getEl('laporanPinInput').value;
