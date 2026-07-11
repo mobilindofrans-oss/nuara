@@ -109,7 +109,6 @@ function _sbFallback(errMsg) {
     if (mode === 'supabase') {
         showToast(msg, 'warning');
     }
-    return 'FALLBACK';
 }
 
 const supabaseAPI = {
@@ -369,7 +368,9 @@ function getCurrentDatetime() {
 
 function formatRupiah(n) {
     if (!n && n !== 0) return '';
-    return 'RP. ' + parseInt(n).toLocaleString('id-ID') + ',-';
+    var num = parseInt(n, 10);
+    if (isNaN(num)) num = 0;
+    return 'RP. ' + num.toLocaleString('id-ID') + ',-';
 }
 
 function formatTgl(val) {
@@ -426,7 +427,7 @@ async function generateNoTiket() {
                 next = maxSeq + 1;
             }
         }
-    } catch (e) { /* fallback */ }
+    } catch (e) { console.warn('generateNoTiket error:', e); }
 
     getEl('no_tiket').value = prefix + String(next).padStart(4, '0');
 }
@@ -510,7 +511,8 @@ function lighten(hex, pct) {
     return '#' + [r,g,b].map(function (x) { return x.toString(16).padStart(2,'0'); }).join('');
 }
 
-function showSection(id) {
+async function showSection(id) {
+    _savedData = null;
     document.querySelectorAll('.section').forEach(function (s) { s.classList.remove('active'); });
     var el = getEl(id);
     if (el) el.classList.add('active');
@@ -518,11 +520,11 @@ function showSection(id) {
     if (id === 'sectionForm') { generateNoTiket(); autoFillPic(); }
     if (id === 'sectionDaftar') {
         var user = getSession();
-        if (user && user.role === 'superadmin' && getEl('agenFilterTiket').value) loadTicketsWithFilter();
+        if (user && user.role === 'superadmin' && getEl('agenFilterTiket').value) await loadTicketsWithFilter();
         else loadTickets().then(function () { renderTickets(); }).catch(function (e) { console.error('Load error:', e); });
     }
     if (id === 'sectionLaporan') {
-        if (laporanAuthed) { getEl('laporanPinGate').style.display = 'none'; getEl('laporanContent').style.display = ''; renderLaporan(); }
+        if (laporanAuthed) { getEl('laporanPinGate').style.display = 'none'; getEl('laporanContent').style.display = ''; loadTickets().then(function () { renderLaporan(); }).catch(function (e) { console.error('Load error:', e); }); }
         else { getEl('laporanPinGate').style.display = ''; getEl('laporanContent').style.display = 'none'; }
     }
     if (id === 'sectionPengaturan') {
@@ -728,10 +730,9 @@ function closeSuperPin() {
     if (window._resolveSuperPin) { var r = window._resolveSuperPin; window._resolveSuperPin = null; r(false); }
 }
 
-var _sessionUserRole = '';
-
 async function cancelTicket(noTiket) {
-    if (_sessionUserRole === 'pic') {
+    var u = getSession();
+    if (u && u.role === 'pic') {
         var auth = await showSuperPinPrompt('Batalkan tiket ' + noTiket + '? Masukkan PIN Super Admin');
         if (!auth) return;
     } else {
@@ -755,7 +756,8 @@ async function cancelTicket(noTiket) {
 
 async function deleteTicket(noTiket) {
     try {
-        if (_sessionUserRole === 'pic') {
+        var u2 = getSession();
+        if (u2 && u2.role === 'pic') {
             var auth = await showSuperPinPrompt('Hapus tiket ' + noTiket + '? Masukkan PIN Super Admin');
             if (!auth) return;
         } else {
@@ -775,7 +777,9 @@ async function deleteTicket(noTiket) {
 
 async function generateDummy() {
     try {
-        var ok = await showConfirm('Isi Data Contoh', 'Semua data yang ada akan dihapus dan diganti 20 data contoh. Lanjutkan?', 'Ya, Lanjutkan', 'btn-primary');
+        var dbMode = getDBMode();
+        var warning = dbMode === 'supabase' ? ' (PERHATIAN: data di Cloud akan dihapus!)' : '';
+        var ok = await showConfirm('Isi Data Contoh', 'Semua data yang ada akan dihapus dan diganti 20 data contoh.' + warning + ' Lanjutkan?', 'Ya, Lanjutkan', 'btn-primary');
         if (!ok) return;
 
         const btn = document.querySelector('.empty-state .btn');
@@ -796,6 +800,21 @@ async function generateDummy() {
 
 let currentPrintNoTiket = null;
 
+function getQRImgTag(value, maxSize) {
+    if (typeof qrcode === 'undefined' || !value) return '';
+    try {
+        var qr = qrcode(0, 'L');
+        qr.addData(value);
+        qr.make();
+        var count = qr.getModuleCount();
+        var cellSize = Math.max(2, Math.floor((maxSize || 75) / count));
+        return qr.createImgTag(cellSize, 1);
+    } catch (e) {
+        console.warn('QR error:', e);
+        return '';
+    }
+}
+
 function up(v) { return esc(v).toUpperCase(); }
 
 function buildTicketHTML(t) {
@@ -813,7 +832,10 @@ function buildTicketHTML(t) {
         `<p style="margin:0;">${label} :</p><p style="font-weight:700;margin:0 0 2px 0;">${val}</p>`;
 
     const rules =
-        `<p style="font-weight:700;font-size:7.5px;line-height:1.5;margin:0;">• Dilarang membawa hewan / satwa, bahan kimia, sejenis narkotika, senjata tajam, dan lain-lain.<br>• Barang-barang dan surat berharga (emas, sertifikat, dsb) menjadi tanggungan sendiri.<br>• Bagasi penumpang max. 20 kg / penumpang.</p>`;
+        `<ol style="margin:0;padding-left:14px;font-weight:700;font-size:7.5px;line-height:1.4;">` +
+        `<li style="margin:0 0 2px 0;">Apabila batal uang pesanan tidak bisa dikembalikan atau hangus</li>` +
+        `<li style="margin:0;">Para penumpang harus siap (stand by) setengah jam sebelum pemberangkatan dan bilamana datang terlambat pada jam tersebut diatas terpaksa kami tinggal dan uang tidak dapat dikembalikan.</li>` +
+        `</ol>`;
 
     return `
         <div class="bagian-tiket">
@@ -823,16 +845,23 @@ function buildTicketHTML(t) {
             ${f('Tgl Beli', formatTgl(t.tgl_beli))}
             <hr>
             ${f('Penumpang', up(t.nama_penumpang))}
-            ${f('No HP', esc(t.no_hp))}
             <hr>
             ${f('Armada', up(t.armada))}
             ${f('Keberangkatan', up(t.keberangkatan))}
             ${f('Terminal Tujuan', up(t.kedatangan))}
             ${f('Kursi', up(t.no_kursi))}
             <hr>
-            ${f('Harga', formatRupiah(t.harga))}
-            ${f('Berangkat', formatTgl(t.tgl_berangkat))}
-            ${f('PIC Agen', up(t.pic_agen))}
+            <div style="display:flex;gap:8px;align-items:stretch;">
+                <div style="display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:2px 0;">
+                    ${getQRImgTag(t.no_tiket, 75)}
+                </div>
+                <div style="border-left:2px dashed #888;"></div>
+                <div style="flex:1;min-width:0;padding-left:4px;">
+                    ${f('Harga', formatRupiah(t.harga))}
+                    ${f('Berangkat', formatTgl(t.tgl_berangkat))}
+                    ${f('PIC Agen', up(t.pic_agen))}
+                </div>
+            </div>
             <hr>
             ${rules}
             <hr>
@@ -840,6 +869,7 @@ function buildTicketHTML(t) {
             <p class="text-center" style="font-weight:700;font-size:8px;">— ${up(namaAgen)} —</p>
         </div>
 
+        ${localStorage.getItem('showVoucher') !== 'false' ? `
         <div class="separator-gunting"><span>✂</span></div>
 
         <div class="bagian-tiket">
@@ -854,6 +884,7 @@ function buildTicketHTML(t) {
             <hr>
             <p class="text-center" style="font-weight:700;">— SELAMAT MENIKMATI —</p>
         </div>
+        ` : ''}
 
         ${localStorage.getItem('showArsip') !== 'false' ? `
         <div class="separator-gunting"><span>✂</span></div>
@@ -864,7 +895,6 @@ function buildTicketHTML(t) {
             ${f('No Tiket', up(t.no_tiket))}
             ${f('Tgl Beli', formatTgl(t.tgl_beli))}
             ${f('Penumpang', up(t.nama_penumpang))}
-            ${f('No HP', esc(t.no_hp))}
             ${f('Armada', up(t.armada))}
             ${f('Keberangkatan', up(t.keberangkatan))}
             ${f('Terminal Tujuan', up(t.kedatangan))}
@@ -894,6 +924,7 @@ function printTicket(noTiket) {
 
 function closePreview() {
     getEl('overlayCetak').style.display = 'none';
+    currentPrintNoTiket = null;
 }
 
 function doPrint(widthClass) {
@@ -936,17 +967,17 @@ function downloadPDF() {
     showToast('Mengunduh PDF...', 'info');
 
     const w = parseInt(localStorage.getItem('printWidth') || '58');
-    const orig = getEl('previewBody').querySelector('.preview-ticket-wrap');
-    if (!orig) return;
     closePreview();
 
-    const tmp = orig.cloneNode(true);
-    tmp.style.cssText = 'width:' + w + 'mm;margin:0 auto;background:#fff;';
-    document.body.appendChild(tmp);
+    var div = document.createElement('div');
+    div.className = 'preview-ticket-wrap';
+    div.style.cssText = 'width:' + w + 'mm;box-sizing:border-box;margin:0;background:#fff;';
+    div.innerHTML = buildTicketHTML(t);
+    document.body.appendChild(div);
 
     setTimeout(function () {
-        const h = Math.ceil((tmp.offsetHeight / tmp.offsetWidth) * w) + 3;
-        html2pdf(tmp, {
+        var h = Math.ceil((div.offsetHeight / div.offsetWidth) * w) + 3;
+        html2pdf(div, {
             margin: 0,
             filename: (t.no_tiket || 'tiket') + '.pdf',
             image: { type: 'jpeg', quality: 0.95 },
@@ -954,8 +985,9 @@ function downloadPDF() {
             jsPDF: { unit: 'mm', format: [w, h], orientation: 'portrait' }
         }).catch(function (e) {
             console.error('html2pdf error:', e);
+            showToast('Gagal generate PDF: ' + (e.message || 'unknown'), 'danger');
         }).then(function () {
-            document.body.removeChild(tmp);
+            try { document.body.removeChild(div); } catch (ex) {}
         });
     }, 200);
 }
@@ -1069,10 +1101,13 @@ function handleLoginSelect(userId, userName, userRole, userAgen) {
 }
 
 async function handleLoginSubmit() {
-    var userId = parseInt(getEl('loginPinInput').dataset.targetUserId);
+    var userIdRaw = getEl('loginPinInput').dataset.targetUserId;
+    var userId = /^\d+$/.test(userIdRaw) ? parseInt(userIdRaw) : userIdRaw;
     var pin = getEl('loginPinInput').value;
     var errEl = getEl('loginError');
+    var btn = getEl('btnLogin');
     if (!pin) { errEl.textContent = 'Masukkan PIN'; errEl.style.display = ''; return; }
+    btn.disabled = true;
     try {
         var sdb = getUserDB();
         var user = sdb ? await sdb.get(userId) : await db.users.get(userId);
@@ -1081,8 +1116,9 @@ async function handleLoginSubmit() {
             return;
         }
         errEl.style.display = 'none';
-        setSession(user);
-        _sessionUserRole = user.role;
+        var sessionData = Object.assign({}, user);
+        delete sessionData.pin;
+        setSession(sessionData);
         closeLogin();
         renderMenu();
         getEl('agenFilterBar').style.display = user.role === 'superadmin' ? '' : 'none';
@@ -1095,12 +1131,14 @@ async function handleLoginSubmit() {
         showToast('Selamat datang, ' + user.nama + '!', 'success');
     } catch (e) {
         errEl.textContent = 'Terjadi kesalahan.'; errEl.style.display = '';
+    } finally {
+        btn.disabled = false;
     }
 }
 
 function doLogout() {
     clearSession();
-    _sessionUserRole = '';
+    laporanAuthed = false;
     showLogin();
     allTickets = [];
     renderTickets();
@@ -1236,7 +1274,7 @@ async function saveAgenEdit() {
     try {
         var sdb = getAgenDB();
         if (sdb) await sdb.update(id, updateData);
-        await db.agen.update(id, updateData);
+        try { await db.agen.update(id, updateData); } catch (dexErr) { console.warn('Dexie sync warning:', dexErr); showToast('Data agen tersimpan di cloud, gagal sync ke lokal', 'warning'); }
         closeAgenEdit();
         await renderAgenList();
         updateHeader();
@@ -1286,7 +1324,6 @@ function renderPenumpang() {
     });
     penumpangTotalData = Object.values(passengerMap).sort(function (a, b) { return b.count - a.count; });
     if (penumpangTotalData.length === 0) { list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);"><i class="fas fa-users-slash"></i> Tidak ada data penumpang</div>'; return; }
-    var perPage = 10;
     var totalPages = Math.ceil(penumpangTotalData.length / perPage);
     if (penumpangPage > totalPages) penumpangPage = totalPages;
     if (penumpangPage < 1) penumpangPage = 1;
@@ -1378,7 +1415,7 @@ async function addUser() {
     try {
         var sdb = getUserDB();
         if (sdb) await sdb.add(userData);
-        await db.users.add(userData);
+        try { await db.users.add(userData); } catch (dexErr) { console.warn('Dexie sync warning:', dexErr); showToast('User tersimpan di cloud, gagal sync ke lokal', 'warning'); }
         getEl('newUserName').value = '';
         getEl('newUserPin').value = '';
         await renderUserList();
@@ -1420,7 +1457,7 @@ async function submitChangePin() {
     try {
         var sdb = getUserDB();
         if (sdb) await sdb.update(userId, { pin: baru });
-        await db.users.update(userId, { pin: baru });
+        try { await db.users.update(userId, { pin: baru }); } catch (dexErr) { console.warn('Dexie sync warning:', dexErr); showToast('PIN diubah di cloud, gagal sync ke lokal', 'warning'); }
         getEl('overlayChangePin').style.display = 'none';
         showToast('PIN berhasil diubah!', 'success');
     } catch (e) { showToast('Gagal mengubah PIN.', 'danger'); }
@@ -1428,6 +1465,7 @@ async function submitChangePin() {
 
 // ===== BACKUP / EXPORT =====
 async function exportData() {
+    if (!isSuperadmin()) { showToast('Hanya super admin yang bisa export data', 'danger'); return; }
     try {
         var data = await API.read({ all: true });
         if (!data || !data.length) { showToast('Tidak ada data untuk diexport.', 'warning'); return; }
@@ -1462,7 +1500,7 @@ async function importData(file) {
             if (existingSet[item.no_tiket]) { skipped++; continue; }
             var r = await API.create(item);
             if (r && r.status === 'success') imported++;
-            else break; // stop on first real error
+            else console.warn('Import gagal untuk', item.no_tiket, r);
         }
         showToast(imported + ' tiket diimport' + (skipped ? ' (' + skipped + ' skip duplikat)' : '') + '!', 'success');
         await loadTickets();
@@ -1480,6 +1518,13 @@ function loadSettings() {
     const toggle = getEl('toggleArsip');
     toggle.classList.toggle('active', showArsip);
     toggle.querySelector('.toggle-track').classList.toggle('active', showArsip);
+
+    const showVoucher = localStorage.getItem('showVoucher') !== 'false';
+    const toggleV = getEl('toggleVoucher');
+    if (toggleV) {
+        toggleV.classList.toggle('active', showVoucher);
+        toggleV.querySelector('.toggle-track').classList.toggle('active', showVoucher);
+    }
 
     // Printer settings
     getEl('printCopies').value = localStorage.getItem('printCopies') || '1';
@@ -1518,6 +1563,8 @@ function saveSettings() {
     localStorage.setItem('printWidth', width);
     const showArsip = getEl('toggleArsip').classList.contains('active');
     localStorage.setItem('showArsip', showArsip);
+    const showVoucher = getEl('toggleVoucher') ? getEl('toggleVoucher').classList.contains('active') : true;
+    localStorage.setItem('showVoucher', showVoucher);
 
     // Printer settings
     localStorage.setItem('printCopies', getEl('printCopies').value);
@@ -1543,9 +1590,9 @@ function getPin() {
 
 async function renderLaporan() {
     try {
-        const start = getEl('laporanTglStart').value;
-        const end = getEl('laporanTglEnd').value;
-    var agenId = getEl('agenFilterLaporan') ? getEl('agenFilterLaporan').value : '';
+        var start = getEl('laporanTglStart').value;
+        var end = getEl('laporanTglEnd').value;
+        var agenId = getEl('agenFilterLaporan') ? getEl('agenFilterLaporan').value : '';
 
     let data = allTickets.filter(function (t) { return t.status === 'aktif'; });
     if (agenId) data = data.filter(function (t) { return t.agen_id === agenId; });
@@ -1616,7 +1663,7 @@ async function renderLaporan() {
 function getHeaderNama() {
     var user = getSession();
     if (user && user.role === 'superadmin') return 'NAURA TRANS';
-    return (localStorage.getItem('agenNama') || 'LOKET');
+    return (localStorage.getItem('namaAgen') || 'LOKET');
 }
 
 function downloadLaporanPDF() {
@@ -1885,6 +1932,13 @@ document.addEventListener('DOMContentLoaded', async function () {
         var on = this.classList.toggle('active');
         this.querySelector('.toggle-track').classList.toggle('active', on);
     });
+    var toggleVEl = getEl('toggleVoucher');
+    if (toggleVEl) {
+        toggleVEl.addEventListener('click', function () {
+            var on = this.classList.toggle('active');
+            this.querySelector('.toggle-track').classList.toggle('active', on);
+        });
+    }
 
     // ===== LOGIN EVENTS =====
     getEl('loginUserList').addEventListener('click', function (e) {
@@ -1983,7 +2037,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     getEl('btnSuperPinOk').addEventListener('click', async function () {
         var pin = getEl('superPinInput').value;
         var sdb = getUserDB();
-        var users = sdb ? await sdb.getAll() : await db.users.where('role').equals('superadmin').toArray();
+        var users;
+        if (sdb) { users = await sdb.getAll(); users = users.filter(function (u) { return u.role === 'superadmin'; }); }
+        else { users = await db.users.where('role').equals('superadmin').toArray(); }
         var match = users.some(function (u) { return u.pin === pin; });
         if (match) {
             getEl('overlaySuperPin').style.display = 'none';
@@ -2019,7 +2075,6 @@ document.addEventListener('DOMContentLoaded', async function () {
         renderMenu();
         var user = getSession();
         if (user) {
-            _sessionUserRole = user.role;
             getEl('agenFilterBar').style.display = user.role === 'superadmin' ? '' : 'none';
             getEl('agenFilterLaporanBar').style.display = user.role === 'superadmin' ? '' : 'none';
             if (user.role === 'superadmin') { renderAgenList(); renderUserList(); }
