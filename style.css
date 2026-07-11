@@ -16,7 +16,6 @@
     --radius-sm: 8px;
     --shadow: 0 2px 8px rgba(0,0,0,0.08);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
-    --app-bar-height: auto;
     --app-bar-min-height: 72px;
 }
 
@@ -59,9 +58,10 @@ body {
     align-items: center;
     justify-content: center;
     gap: 6px;
+    line-height: 1.2;
 }
 
-.app-bar h1 i { font-size: 16px; opacity: 0.9; }
+.app-bar h1 i { font-size: 16px; opacity: 0.9; flex-shrink: 0; }
 
 .app-bar p {
     font-size: 10px;
@@ -70,6 +70,9 @@ body {
     font-weight: 400;
     text-align: center;
     line-height: 1.3;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
 }
 
 .header-hp {
