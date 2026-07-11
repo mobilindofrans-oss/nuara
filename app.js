@@ -882,7 +882,7 @@ function buildTicketHTML(t) {
     });
 
     const f = (label, val) =>
-        `<p style="font-weight:700;margin:0;">${label} :</p><p style="font-weight:700;margin:0 0 2px 0;">${val}</p>`;
+        `<p style="margin:0;">${label} :</p><p style="font-weight:700;margin:0 0 2px 0;">${val}</p>`;
 
     const rules =
         `<ol style="margin:0;padding-left:14px;font-weight:700;font-size:11px;line-height:1.4;">` +
