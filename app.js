@@ -129,7 +129,10 @@ const supabaseAPI = {
     async create(data) {
         try {
             var c = getSupabaseClient(); if (!c) return dexieAPI.create(data);
-            var { error } = await c.from('tickets').insert(data);
+            var payload = Object.assign({}, data);
+            if (payload.tgl_beli) payload.tgl_beli = formatToISO(payload.tgl_beli);
+            if (payload.tgl_berangkat) payload.tgl_berangkat = formatToISO(payload.tgl_berangkat);
+            var { error } = await c.from('tickets').insert(payload);
             if (error) throw error;
             return { status: 'success' };
         } catch (err) {
@@ -180,7 +183,7 @@ const supabaseAPI = {
                 var tglBeli = new Date(d.getTime() - off * 60000).toISOString().slice(0, 10) + 'T08:' + String(Math.floor(Math.random() * 59)).padStart(2, '0');
                 var tglBerangkat = new Date(d.getTime() + 86400000 * (1 + Math.floor(Math.random() * 3))).toISOString().slice(0, 10) + 'T' + String(7 + Math.floor(Math.random() * 12)).padStart(2, '0') + ':' + String(Math.floor(Math.random() * 59)).padStart(2, '0');
                 var noTiket = 'TKT-' + tglBeli.slice(0, 10).replace(/-/g, '') + '-' + String(i + 1).padStart(4, '0');
-                rows.push({ no_tiket: noTiket, tgl_beli: tglBeli, nama_penumpang: names[i % names.length], no_hp: String(81200000000 + i + Math.floor(Math.random() * 100)), armada: armadas[i % armadas.length], keberangkatan: terminals[i % terminals.length], kedatangan: terminals[(i + 4) % terminals.length], no_kursi: kursi[i % kursi.length], harga: String(75000 + Math.floor(Math.random() * 200000)), tgl_berangkat: tglBerangkat, pic_agen: 'PETUGAS ' + (Math.floor(i / 4) + 1), status: 'aktif', agen_id: agenId || 'AG001' });
+                rows.push({ no_tiket: noTiket, tgl_beli: formatToISO(tglBeli), nama_penumpang: names[i % names.length], no_hp: String(81200000000 + i + Math.floor(Math.random() * 100)), armada: armadas[i % armadas.length], keberangkatan: terminals[i % terminals.length], kedatangan: terminals[(i + 4) % terminals.length], no_kursi: kursi[i % kursi.length], harga: String(75000 + Math.floor(Math.random() * 200000)), tgl_berangkat: formatToISO(tglBerangkat), pic_agen: 'PETUGAS ' + (Math.floor(i / 4) + 1), status: 'aktif', agen_id: agenId || 'AG001' });
             }
             var { error: insErr } = await c.from('tickets').insert(rows);
             if (insErr) throw insErr;
@@ -361,11 +364,23 @@ function getEl(id) { return document.getElementById(id); }
 
 function getCurrentDatetime() {
     var now = new Date();
-    return now.getFullYear() + '-' +
-        String(now.getMonth() + 1).padStart(2, '0') + '-' +
-        String(now.getDate()).padStart(2, '0') + 'T' +
-        String(now.getHours()).padStart(2, '0') + ':' +
-        String(now.getMinutes()).padStart(2, '0');
+    return now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' +
+        pad2(now.getDate()) + 'T' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+}
+
+function getLocalOffset() {
+    var off = new Date().getTimezoneOffset();
+    var sign = off <= 0 ? '+' : '-';
+    off = Math.abs(off);
+    return sign + pad2(Math.floor(off / 60)) + ':' + pad2(off % 60);
+}
+
+function formatToISO(val) {
+    if (!val) return val;
+    if (typeof val === 'string' && val.includes('T') && !(/[+-]\d{2}:\d{2}$/.test(val)) && !val.endsWith('Z')) {
+        return val + getLocalOffset();
+    }
+    return val;
 }
 
 function formatRupiah(n) {
@@ -375,31 +390,25 @@ function formatRupiah(n) {
     return 'RP. ' + num.toLocaleString('id-ID') + ',-';
 }
 
+function pad2(n) { return String(n).padStart(2, '0'); }
+
 function formatTgl(val) {
     if (!val) return '';
     if (typeof val === 'string' && val.includes('T')) {
-        // Has timezone offset (Supabase timestamptz) — use Date to convert to local
-        if (/[+-]\d{2}:\d{2}$/.test(val) || val.endsWith('Z')) {
-            const d = new Date(val);
-            const date = String(d.getDate()).padStart(2, '0') + '/' +
-                         String(d.getMonth() + 1).padStart(2, '0') + '/' +
-                         d.getFullYear();
-            const time = String(d.getHours()).padStart(2, '0') + ':' +
-                         String(d.getMinutes()).padStart(2, '0');
-            return date + ' ' + time;
+        var d = new Date(val);
+        if (!isNaN(d.getTime())) {
+            return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' +
+                d.getFullYear() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
         }
-        // No timezone (Dexie format YYYY-MM-DDTHH:MM) — manual parse
-        const parts = val.split('T');
-        const dp = parts[0].split('-');
-        const date = dp[2] + '/' + dp[1] + '/' + dp[0];
-        const tp = parts[1].split(':');
-        if (tp.length >= 2) {
-            return date + ' ' + tp[0] + ':' + tp[1];
-        }
+        // Fallback: manual parse
+        var parts = val.split('T');
+        var dp = parts[0].split('-');
+        var date = dp[2] + '/' + dp[1] + '/' + dp[0];
+        if (parts[1]) { var tp = parts[1].split(':'); if (tp.length >= 2) return date + ' ' + tp[0] + ':' + tp[1]; }
         return date;
     }
     if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) {
-        const p = val.split('-');
+        var p = val.split('-');
         return p[2] + '/' + p[1] + '/' + p[0];
     }
     return String(val);
@@ -1057,11 +1066,15 @@ function renderHeaderContent(nama, alamat, hpList) {
     }
     el.innerHTML = html;
     document.title = nama;
-    // Adjust body padding-top to match dynamic header height
+    adjustPadding();
+}
+
+function adjustPadding() {
     setTimeout(function () {
         var h = getEl('headerContent').offsetHeight;
-        if (h > 0) document.body.style.paddingTop = (h + 16) + 'px';
-    }, 50);
+        var min = 80;
+        if (h > 20) document.body.style.paddingTop = Math.max(h + 24, min) + 'px';
+    }, 200);
 }
 
 // ===== LOGIN SYSTEM =====
