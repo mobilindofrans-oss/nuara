@@ -876,16 +876,16 @@ function buildTicketHTML(t) {
     const hpAgenList = getHpList();
 
     let headerInfo = `<h3 style="font-weight:700">${up(namaAgen)}</h3>`;
-    if (alamatAgen) headerInfo += `<p class="text-center" style="font-weight:700;font-size:10px;margin:0.5mm 0;">${up(alamatAgen)}</p>`;
+    if (alamatAgen) headerInfo += `<p class="text-center" style="font-weight:700;font-size:11px;margin:0.5mm 0;">${up(alamatAgen)}</p>`;
     hpAgenList.forEach(function (h) {
-        if (h) headerInfo += `<p class="text-center" style="font-weight:700;font-size:10px;margin:0.5mm 0;">📞 ${esc(h)}</p>`;
+        if (h) headerInfo += `<p class="text-center" style="font-weight:700;font-size:11px;margin:0.5mm 0;">📞 ${esc(h)}</p>`;
     });
 
     const f = (label, val) =>
         `<p style="margin:0;">${label} :</p><p style="font-weight:700;margin:0 0 2px 0;">${val}</p>`;
 
     const rules =
-        `<ol style="margin:0;padding-left:12px;font-weight:700;font-size:9px;line-height:1.3;">` +
+        `<ol style="margin:0;padding-left:12px;font-weight:700;font-size:10px;line-height:1.3;">` +
         `<li style="margin:0 0 2px 0;">Apabila batal uang pesanan tidak bisa dikembalikan atau hangus</li>` +
         `<li style="margin:0;">Para penumpang harus siap (stand by) setengah jam sebelum pemberangkatan dan bilamana datang terlambat pada jam tersebut diatas terpaksa kami tinggal dan uang tidak dapat dikembalikan.</li>` +
         `</ol>`;
@@ -919,7 +919,7 @@ function buildTicketHTML(t) {
             ${rules}
             <hr>
             <p class="text-center" style="font-weight:700;">TERIMA KASIH</p>
-            <p class="text-center" style="font-weight:700;font-size:10px;">— ${up(namaAgen)} —</p>
+            <p class="text-center" style="font-weight:700;font-size:11px;">— ${up(namaAgen)} —</p>
         </div>
 
         ${localStorage.getItem('showVoucher') !== 'false' ? `
