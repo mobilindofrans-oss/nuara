@@ -11,6 +11,12 @@ db.version(2).stores({
     await tx.table('agen').add({ id: 'AG001', nama: 'Agen Utama', alamat: '', hp: '[]' });
     await tx.table('users').add({ nama: 'Super Admin', role: 'superadmin', pin: '1234', agen_id: null });
 });
+db.version(3).stores({
+    tickets: 'no_tiket, tgl_beli, nama_penumpang, armada, status, agen_id',
+    agen: 'id, nama',
+    users: '++id, nama, role, agen_id, pin',
+    counters: 'id'
+});
 
 async function seedDefaults() {
     var sdb = getAgenDB();
@@ -57,8 +63,31 @@ function isSupabaseReady() {
     return !!getSupabaseClient();
 }
 
+function randomHex(len) {
+    var s = '';
+    for (var i = 0; i < len; i++) s += '0123456789ABCDEF'.charAt(Math.floor(Math.random() * 16));
+    return s;
+}
+
+function todayPrefix() {
+    var now = new Date();
+    return 'TKT-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) + '-';
+}
+
 // ---- Dexie adapter ----
 const dexieAPI = {
+    async nextTicketNo(tgl) {
+        try {
+            var key = 'tiket_seq_' + (tgl || new Date().toISOString().slice(0, 10));
+            var no = await db.transaction('rw', db.counters, async function () {
+                var row = await db.counters.get(key);
+                var next = (row ? row.val : 0) + 1;
+                await db.counters.put({ id: key, val: next });
+                return next;
+            });
+            return todayPrefix() + String(no).padStart(4, '0') + '-' + randomHex(4);
+        } catch (err) { console.error('Dexie Seq Error:', err); return todayPrefix() + randomHex(6); }
+    },
     async read(filters) {
         try {
             var data;
@@ -94,7 +123,7 @@ const dexieAPI = {
                 var off = d.getTimezoneOffset();
                 var tglBeli = new Date(d.getTime() - off * 60000).toISOString().slice(0, 10) + 'T08:' + String(Math.floor(Math.random() * 59)).padStart(2, '0');
                 var tglBerangkat = new Date(d.getTime() + 86400000 * (1 + Math.floor(Math.random() * 3))).toISOString().slice(0, 10) + 'T' + String(7 + Math.floor(Math.random() * 12)).padStart(2, '0') + ':' + String(Math.floor(Math.random() * 59)).padStart(2, '0');
-                var noTiket = 'TKT-' + tglBeli.slice(0, 10).replace(/-/g, '') + '-' + String(i + 1).padStart(4, '0');
+                var noTiket = i === 0 ? await dexieAPI.nextTicketNo() : todayPrefix() + String(i + 1).padStart(4, '0') + '-' + randomHex(4);
                 await db.tickets.add({ no_tiket: noTiket, tgl_beli: tglBeli, nama_penumpang: names[i % names.length], no_hp: String(81200000000 + i + Math.floor(Math.random() * 100)), armada: armadas[i % armadas.length], keberangkatan: terminals[i % terminals.length], kedatangan: terminals[(i + 4) % terminals.length], no_kursi: kursi[i % kursi.length], harga: String(75000 + Math.floor(Math.random() * 200000)), tgl_berangkat: tglBerangkat, pic_agen: 'PETUGAS ' + (Math.floor(i / 4) + 1), status: 'aktif', agen_id: agenId || 'AG001' });
             }
             return { status: 'success' };
@@ -112,6 +141,19 @@ function _sbFallback(errMsg) {
 }
 
 const supabaseAPI = {
+    async nextTicketNo(tgl) {
+        try {
+            var c = getSupabaseClient();
+            if (!c) return dexieAPI.nextTicketNo(tgl);
+            var { data, error } = await c.rpc('next_ticket_no', { tgl_date: tgl || new Date().toISOString().slice(0, 10) });
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.error('Supabase RPC Error:', err);
+            _sbFallback(err.message);
+            return dexieAPI.nextTicketNo(tgl);
+        }
+    },
     async read(filters) {
         try {
             var c = getSupabaseClient(); if (!c) return dexieAPI.read(filters);
@@ -126,7 +168,8 @@ const supabaseAPI = {
             return dexieAPI.read(filters);
         }
     },
-    async create(data) {
+    async create(data, retries) {
+        retries = retries || 3;
         try {
             var c = getSupabaseClient(); if (!c) return dexieAPI.create(data);
             var payload = Object.assign({}, data);
@@ -136,6 +179,17 @@ const supabaseAPI = {
             if (error) throw error;
             return { status: 'success' };
         } catch (err) {
+            // Unique constraint violation (PG code 23505) — retry with new no_tiket
+            if (err && (err.code === '23505' || (err.message && err.message.indexOf('duplicate') > -1))) {
+                if (retries > 0) {
+                    var newData = Object.assign({}, data);
+                    newData.no_tiket = await supabaseAPI.nextTicketNo();
+                    return supabaseAPI.create(newData, retries - 1);
+                }
+                showToast('Gagal: terlalu banyak konflik nomor tiket. Coba lagi.', 'danger');
+                return null;
+            }
+            // Network / other error — fallback to dexie
             console.error('Supabase Error:', err);
             _sbFallback(err.message);
             return dexieAPI.create(data);
@@ -182,7 +236,7 @@ const supabaseAPI = {
                 var off = d.getTimezoneOffset();
                 var tglBeli = new Date(d.getTime() - off * 60000).toISOString().slice(0, 10) + 'T08:' + String(Math.floor(Math.random() * 59)).padStart(2, '0');
                 var tglBerangkat = new Date(d.getTime() + 86400000 * (1 + Math.floor(Math.random() * 3))).toISOString().slice(0, 10) + 'T' + String(7 + Math.floor(Math.random() * 12)).padStart(2, '0') + ':' + String(Math.floor(Math.random() * 59)).padStart(2, '0');
-                var noTiket = 'TKT-' + tglBeli.slice(0, 10).replace(/-/g, '') + '-' + String(i + 1).padStart(4, '0');
+                var noTiket = i === 0 ? await supabaseAPI.nextTicketNo() : todayPrefix() + String(i + 1).padStart(4, '0') + '-' + randomHex(4);
                 rows.push({ no_tiket: noTiket, tgl_beli: formatToISO(tglBeli), nama_penumpang: names[i % names.length], no_hp: String(81200000000 + i + Math.floor(Math.random() * 100)), armada: armadas[i % armadas.length], keberangkatan: terminals[i % terminals.length], kedatangan: terminals[(i + 4) % terminals.length], no_kursi: kursi[i % kursi.length], harga: String(75000 + Math.floor(Math.random() * 200000)), tgl_berangkat: formatToISO(tglBerangkat), pic_agen: 'PETUGAS ' + (Math.floor(i / 4) + 1), status: 'aktif', agen_id: agenId || 'AG001' });
             }
             var { error: insErr } = await c.from('tickets').insert(rows);
@@ -339,6 +393,7 @@ function buildFilters(opts) {
 
 // ---- Public API facade (role-aware) ----
 const API = {
+    async nextTicketNo(tgl) { return getDB().nextTicketNo(tgl); },
     async read(opts) { return getDB().read(buildFilters(opts)); },
     async create(data) {
         var user = getSession();
@@ -422,25 +477,12 @@ function rupiahInput(e) {
 }
 
 async function generateNoTiket() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const prefix = 'TKT-' + y + m + d + '-';
-
-    let next = 1;
     try {
-        const all = await API.read({ all: true });
-        if (all && all.length) {
-            const todayTickets = all.filter(function (t) { return t.no_tiket && t.no_tiket.indexOf(prefix) === 0; });
-            if (todayTickets.length) {
-                const maxSeq = Math.max.apply(null, todayTickets.map(function (t) { return parseInt(t.no_tiket.slice(-4), 10) || 0; }));
-                next = maxSeq + 1;
-            }
-        }
+        var no = await API.nextTicketNo();
+        if (no) { getEl('no_tiket').value = no; return; }
     } catch (e) { console.warn('generateNoTiket error:', e); }
-
-    getEl('no_tiket').value = prefix + String(next).padStart(4, '0');
+    // Fallback
+    getEl('no_tiket').value = todayPrefix() + randomHex(6);
 }
 
 function showConfirm(title, msg, btnLabel, btnClass) {
@@ -1337,10 +1379,12 @@ function renderPenumpang() {
     allTickets.forEach(function (t) {
         if (t.status === 'batal' && localStorage.getItem('showArsip') === 'false') return;
         var nama = (t.nama_penumpang || '').trim();
+        var hp = (t.no_hp || '').trim();
         if (!nama) return;
-        if (filter && !nama.toLowerCase().includes(filter)) return;
-        if (!passengerMap[nama]) passengerMap[nama] = { nama: nama, hp: t.no_hp || '-', count: 0 };
-        passengerMap[nama].count++;
+        var key = hp || nama;
+        if (filter && !nama.toLowerCase().includes(filter) && !hp.toLowerCase().includes(filter)) return;
+        if (!passengerMap[key]) passengerMap[key] = { nama: nama, hp: hp || '-', count: 0 };
+        passengerMap[key].count++;
     });
     penumpangTotalData = Object.values(passengerMap).sort(function (a, b) { return b.count - a.count; });
     if (penumpangTotalData.length === 0) { list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);"><i class="fas fa-users-slash"></i> Tidak ada data penumpang</div>'; return; }
@@ -1372,8 +1416,10 @@ function downloadPenumpangCSV() {
     var map = {};
     allTickets.forEach(function (t) {
         var nama = (t.nama_penumpang || '').trim();
+        var hp = (t.no_hp || '').trim();
         if (!nama) return;
-        if (!map[nama]) map[nama] = { nama: nama, hp: t.no_hp || '' };
+        var key = hp || nama;
+        if (!map[key]) map[key] = { nama: nama, hp: hp };
     });
     var data = Object.values(map).sort(function (a, b) { return a.nama.localeCompare(b.nama); });
     if (!data.length) { showToast('Tidak ada data penumpang', 'warning'); return; }
