@@ -961,12 +961,7 @@ tbody tr:active { background: #fafafa; }
 }
 .menu-card .menu-title { font-size: 14px; font-weight: 600; color: var(--text); }
 .menu-card .menu-desc { font-size: 11px; color: var(--text-hint); margin: 0; }
-.menu-card .menu-badge {
-    position: absolute; top: 8px; right: 8px;
-    background: var(--danger); color: #fff; border-radius: 10px;
-    padding: 0 6px; font-size: 10px; line-height: 18px;
-}
-.menu-card { position: relative; }
+
 
 @media (min-width: 600px) {
     .menu-grid { grid-template-columns: 1fr 1fr 1fr; }
