@@ -1112,88 +1112,73 @@ function buildESCPOS(t) {
     return result.slice(0, end + 1);
 }
 
-var _btDevice = null, _btChar = null;
-
-async function _btSend(data) {
-    var chunk = 20;
-    for (var i = 0; i < data.length; i += chunk) {
-        await _btChar.writeValue(data.slice(i, i + chunk));
-        await new Promise(function (r) { setTimeout(r, 30); });
-    }
-}
-
-async function _btConnect() {
-    // Try reusing cached device first
-    if (_btDevice && _btDevice.gatt) {
-        try {
-            var srv = await _btDevice.gatt.connect();
-            return srv;
-        } catch (e) { _btDevice = null; _btChar = null; }
-    }
-
-    showToast('Pilih printer Bluetooth...', 'info');
-    _btDevice = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [
-            '000018f0-0000-1000-8000-00805f9b34fb',
-            '0000ff02-0000-1000-8000-00805f9b34fb',
-            '0000ab00-0000-1000-8000-00805f9b34fb',
-            '0000fff0-0000-1000-8000-00805f9b34fb'
-        ]
-    });
-
-    _btDevice.addEventListener('gattserverdisconnected', function () {
-        _btChar = null;
-    });
-
-    showToast('Menghubungkan ke ' + (_btDevice.name || 'Printer') + '...', 'info');
-    return await _btDevice.gatt.connect();
-}
-
-async function _btFindChar(server) {
-    var uuids = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '0000ff02-0000-1000-8000-00805f9b34fb',
-        '0000ab00-0000-1000-8000-00805f9b34fb',
-        '0000fff0-0000-1000-8000-00805f9b34fb'
-    ];
-    for (var si = 0; si < uuids.length; si++) {
-        try {
-            var svc = await server.getPrimaryService(uuids[si]);
-            var chars = await svc.getCharacteristics();
-            for (var ci = 0; ci < chars.length; ci++) {
-                if (chars[ci].properties.write || chars[ci].properties.writeWithoutResponse) return chars[ci];
-            }
-        } catch (e) {}
-    }
-    var all = await server.getPrimaryServices();
-    for (var si2 = 0; si2 < all.length; si2++) {
-        var c2 = await all[si2].getCharacteristics();
-        for (var ci2 = 0; ci2 < c2.length; ci2++) {
-            if (c2[ci2].properties.write || c2[ci2].properties.writeWithoutResponse) return c2[ci2];
-        }
-    }
-    return null;
-}
-
 async function bluetoothPrintTicket(noTiket) {
     if (!navigator.bluetooth) { showToast('Browser tidak mendukung Bluetooth', 'danger'); return; }
     var t = allTickets.find(function (x) { return x.no_tiket === noTiket; });
     if (!t) { showToast('Data tiket tidak ditemukan', 'danger'); return; }
 
+    // Ganti tombol jadi loading — biar user gesture masih aktif
+    var btn = document.querySelector('[data-btprint="' + noTiket + '"]') || document.getElementById('btnBluetoothPrint');
+    var origHtml, disabled = false;
+    if (btn) { origHtml = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; btn.disabled = true; disabled = true; }
+
     try {
-        var server = await _btConnect();
-        if (!_btChar) {
-            _btChar = await _btFindChar(server);
-            if (!_btChar) {
-                showToast('Tidak ditemukan port cetak pada printer', 'danger');
-                server.disconnect(); return;
+        var device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [
+                '000018f0-0000-1000-8000-00805f9b34fb',
+                '0000ff02-0000-1000-8000-00805f9b34fb',
+                '0000ab00-0000-1000-8000-00805f9b34fb',
+                '0000fff0-0000-1000-8000-00805f9b34fb'
+            ]
+        });
+
+        showToast('Menghubungkan ke ' + (device.name || 'Printer') + '...', 'info');
+        var server = await device.gatt.connect();
+        var characteristic = null;
+
+        // Cari service & characteristic yg writable
+        var srvUUIDs = [
+            '000018f0-0000-1000-8000-00805f9b34fb',
+            '0000ff02-0000-1000-8000-00805f9b34fb',
+            '0000ab00-0000-1000-8000-00805f9b34fb',
+            '0000fff0-0000-1000-8000-00805f9b34fb'
+        ];
+        for (var si = 0; si < srvUUIDs.length; si++) {
+            try {
+                var svc = await server.getPrimaryService(srvUUIDs[si]);
+                var chars = await svc.getCharacteristics();
+                for (var ci = 0; ci < chars.length; ci++) {
+                    if (chars[ci].properties.write || chars[ci].properties.writeWithoutResponse) { characteristic = chars[ci]; break; }
+                }
+            } catch (e) {}
+            if (characteristic) break;
+        }
+
+        // Fallback: semua service
+        if (!characteristic) {
+            var all = await server.getPrimaryServices();
+            for (var si2 = 0; si2 < all.length; si2++) {
+                var c2 = await all[si2].getCharacteristics();
+                for (var ci2 = 0; ci2 < c2.length; ci2++) {
+                    if (c2[ci2].properties.write || c2[ci2].properties.writeWithoutResponse) { characteristic = c2[ci2]; break; }
+                }
+                if (characteristic) break;
             }
         }
 
+        if (!characteristic) {
+            showToast('Tidak ditemukan port cetak pada printer', 'danger');
+            server.disconnect(); return;
+        }
+
+        // Kirim data per 20 byte + delay 30ms
         var data = buildESCPOS(t);
         showToast('Mencetak... (' + data.length + ' bytes)', 'info');
-        await _btSend(data);
+        for (var i = 0; i < data.length; i += 20) {
+            await characteristic.writeValue(data.slice(i, i + 20));
+            await new Promise(function (r) { setTimeout(r, 30); });
+        }
 
         showToast('Tiket berhasil dicetak via Bluetooth', 'success');
         setTimeout(function () { try { server.disconnect(); } catch (e) {} }, 300);
@@ -1205,6 +1190,8 @@ async function bluetoothPrintTicket(noTiket) {
             showToast('Pemilihan printer dibatalkan', 'warning');
         else { console.error('Bluetooth Error:', err); showToast('Gagal: ' + err.message, 'danger'); }
     }
+
+    if (btn && disabled) { btn.innerHTML = origHtml; btn.disabled = false; }
 }
 
 function handleTableClick(e) {
