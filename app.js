@@ -877,16 +877,16 @@ function buildTicketHTML(t) {
     const hpAgenList = getHpList();
 
     let headerInfo = `<h3 style="font-weight:700">${up(namaAgen)}</h3>`;
-    if (alamatAgen) headerInfo += `<p class="text-center" style="font-weight:700;font-size:10px;margin:0.5mm 0;">${up(alamatAgen)}</p>`;
+    if (alamatAgen) headerInfo += `<p class="text-center" style="font-weight:700;font-size:12px;margin:1mm 0;">${up(alamatAgen)}</p>`;
     hpAgenList.forEach(function (h) {
-        if (h) headerInfo += `<p class="text-center" style="font-weight:700;font-size:10px;margin:0.5mm 0;">📞 ${esc(h)}</p>`;
+        if (h) headerInfo += `<p class="text-center" style="font-weight:700;font-size:12px;margin:1mm 0;">📞 ${esc(h)}</p>`;
     });
 
     const f = (label, val) =>
         `<p style="font-weight:700;margin:0;">${label} :</p><p style="font-weight:700;margin:0 0 2px 0;">${val}</p>`;
 
     const rules =
-        `<ol style="margin:0;padding-left:14px;font-weight:700;font-size:9px;line-height:1.4;">` +
+        `<ol style="margin:0;padding-left:14px;font-weight:700;font-size:11px;line-height:1.4;">` +
         `<li style="margin:0 0 2px 0;">Apabila batal uang pesanan tidak bisa dikembalikan atau hangus</li>` +
         `<li style="margin:0;">Para penumpang harus siap (stand by) setengah jam sebelum pemberangkatan dan bilamana datang terlambat pada jam tersebut diatas terpaksa kami tinggal dan uang tidak dapat dikembalikan.</li>` +
         `</ol>`;
@@ -920,7 +920,7 @@ function buildTicketHTML(t) {
             ${rules}
             <hr>
             <p class="text-center" style="font-weight:700;">TERIMA KASIH</p>
-            <p class="text-center" style="font-weight:700;font-size:10px;">— ${up(namaAgen)} —</p>
+            <p class="text-center" style="font-weight:700;font-size:12px;">— ${up(namaAgen)} —</p>
         </div>
 
         ${localStorage.getItem('showVoucher') !== 'false' ? `
@@ -1062,8 +1062,10 @@ function buildESCPOS(t) {
     function bold(on) { add(E, 0x45, on ? 0x01 : 0x00); }
     function center() { add(E, 0x61, 0x01); }
     function left() { add(E, 0x61, 0x00); }
-    function line() { txt('================================'); add(0x0A); }
+    function line(c) { txt(c || '='); add(0x0A); }
+    function sep() { txt('================================'); add(0x0A); }
     function nl() { add(0x0A); }
+    function pad(v, len) { v = String(v); while (v.length < len) v += ' '; return v; }
 
     add(E, 0x40);                     // Init
     center();
@@ -1071,44 +1073,107 @@ function buildESCPOS(t) {
     txt(namaAgen); nl();
     add(G, 0x21, 0x00);              // Normal
     if (alamatAgen) { txt(alamatAgen); nl(); }
-    hpAgenList.forEach(function (h) { if (h) { txt('HP: ' + h); nl(); } });
-    nl(); line();
+    if (hpAgenList.length) { txt('HP: ' + hpAgenList.join(' / ')); nl(); }
+    sep();
 
-    left(); bold(true);
+    bold(true);
     txt('No Tiket : ' + t.no_tiket); nl();
     txt('Tgl Beli : ' + formatTgl(t.tgl_beli)); nl();
     bold(false);
-    nl(); line();
+    sep();
 
-    bold(true);
-    txt('Penumpang : ' + (t.nama_penumpang || '').toUpperCase()); nl();
-    bold(false);
-    nl(); line();
+    txt('PENUMPANG : ' + (t.nama_penumpang || '').toUpperCase()); nl();
+    sep();
 
-    txt('Armada          : ' + (t.armada || '').toUpperCase()); nl();
-    txt('Keberangkatan   : ' + (t.keberangkatan || '').toUpperCase()); nl();
-    txt('Terminal Tujuan : ' + (t.kedatangan || '').toUpperCase()); nl();
-    txt('Kursi           : ' + (t.no_kursi || '').toUpperCase()); nl();
-    nl(); line();
+    txt(pad('Armada', 12) + ': ' + (t.armada || '').toUpperCase()); nl();
+    txt(pad('Dari', 12) + ': ' + (t.keberangkatan || '').toUpperCase()); nl();
+    txt(pad('Tujuan', 12) + ': ' + (t.kedatangan || '').toUpperCase()); nl();
+    txt(pad('Kursi', 12) + ': ' + (t.no_kursi || '').toUpperCase()); nl();
+    sep();
 
-    center(); bold(true);
-    add(G, 0x21, 0x11);
+    center();
     txt('HARGA: ' + formatRupiah(t.harga)); nl();
-    add(G, 0x21, 0x00);
-    bold(false); left();
-    nl();
-
-    txt('Berangkat : ' + formatTgl(t.tgl_berangkat)); nl();
-    txt('PIC Agen  : ' + (t.pic_agen || '').toUpperCase()); nl();
-    nl(); line();
+    left();
+    txt(pad('Berangkat', 12) + ': ' + formatTgl(t.tgl_berangkat)); nl();
+    txt(pad('PIC Agen', 12) + ': ' + (t.pic_agen || '').toUpperCase()); nl();
+    sep();
 
     center();
     txt('TERIMA KASIH'); nl();
-    txt('--- ' + namaAgen.toUpperCase() + ' ---'); nl();
-    nl(); nl(); nl();
+    txt('- ' + namaAgen.toUpperCase() + ' -'); nl();
+    nl();
 
     add(G, 0x56, 0x00);              // Cut
-    return new Uint8Array(b);
+    var result = new Uint8Array(b);
+
+    // Trim trailing newlines
+    var end = result.length;
+    while (end > 0 && result[end - 1] === 0x0A) end--;
+    return result.slice(0, end + 1);
+}
+
+var _btDevice = null, _btChar = null;
+
+async function _btSend(data) {
+    var chunk = 20;
+    for (var i = 0; i < data.length; i += chunk) {
+        await _btChar.writeValue(data.slice(i, i + chunk));
+        await new Promise(function (r) { setTimeout(r, 30); });
+    }
+}
+
+async function _btConnect() {
+    // Try reusing cached device first
+    if (_btDevice && _btDevice.gatt) {
+        try {
+            var srv = await _btDevice.gatt.connect();
+            return srv;
+        } catch (e) { _btDevice = null; _btChar = null; }
+    }
+
+    showToast('Pilih printer Bluetooth...', 'info');
+    _btDevice = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [
+            '000018f0-0000-1000-8000-00805f9b34fb',
+            '0000ff02-0000-1000-8000-00805f9b34fb',
+            '0000ab00-0000-1000-8000-00805f9b34fb',
+            '0000fff0-0000-1000-8000-00805f9b34fb'
+        ]
+    });
+
+    _btDevice.addEventListener('gattserverdisconnected', function () {
+        _btChar = null;
+    });
+
+    showToast('Menghubungkan ke ' + (_btDevice.name || 'Printer') + '...', 'info');
+    return await _btDevice.gatt.connect();
+}
+
+async function _btFindChar(server) {
+    var uuids = [
+        '000018f0-0000-1000-8000-00805f9b34fb',
+        '0000ff02-0000-1000-8000-00805f9b34fb',
+        '0000ab00-0000-1000-8000-00805f9b34fb',
+        '0000fff0-0000-1000-8000-00805f9b34fb'
+    ];
+    for (var si = 0; si < uuids.length; si++) {
+        try {
+            var svc = await server.getPrimaryService(uuids[si]);
+            var chars = await svc.getCharacteristics();
+            for (var ci = 0; ci < chars.length; ci++) {
+                if (chars[ci].properties.write || chars[ci].properties.writeWithoutResponse) return chars[ci];
+            }
+        } catch (e) {}
+    }
+    var all = await server.getPrimaryServices();
+    for (var si2 = 0; si2 < all.length; si2++) {
+        var c2 = await all[si2].getCharacteristics();
+        for (var ci2 = 0; ci2 < c2.length; ci2++) {
+            if (c2[ci2].properties.write || c2[ci2].properties.writeWithoutResponse) return c2[ci2];
+        }
+    }
+    return null;
 }
 
 async function bluetoothPrintTicket(noTiket) {
@@ -1117,68 +1182,21 @@ async function bluetoothPrintTicket(noTiket) {
     if (!t) { showToast('Data tiket tidak ditemukan', 'danger'); return; }
 
     try {
-        showToast('Pilih printer Bluetooth...', 'info');
-        var device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: [
-                '000018f0-0000-1000-8000-00805f9b34fb',
-                '0000ff02-0000-1000-8000-00805f9b34fb',
-                '0000ab00-0000-1000-8000-00805f9b34fb',
-                '0000fff0-0000-1000-8000-00805f9b34fb'
-            ]
-        });
-
-        showToast('Menghubungkan ke ' + (device.name || 'Printer') + '...', 'info');
-        var server = await device.gatt.connect();
-        var characteristic = null;
-
-        // Try known service UUIDs
-        var srvUUIDs = [
-            '000018f0-0000-1000-8000-00805f9b34fb',
-            '0000ff02-0000-1000-8000-00805f9b34fb',
-            '0000ab00-0000-1000-8000-00805f9b34fb',
-            '0000fff0-0000-1000-8000-00805f9b34fb'
-        ];
-        for (var si = 0; si < srvUUIDs.length; si++) {
-            try {
-                var svc = await server.getPrimaryService(srvUUIDs[si]);
-                var chars = await svc.getCharacteristics();
-                for (var ci = 0; ci < chars.length; ci++) {
-                    if (chars[ci].properties.write || chars[ci].properties.writeWithoutResponse) {
-                        characteristic = chars[ci]; break;
-                    }
-                }
-            } catch (e) {}
-            if (characteristic) break;
-        }
-
-        // Fallback: scan all services
-        if (!characteristic) {
-            var allSvcs = await server.getPrimaryServices();
-            for (var si2 = 0; si2 < allSvcs.length; si2++) {
-                var chars2 = await allSvcs[si2].getCharacteristics();
-                for (var ci2 = 0; ci2 < chars2.length; ci2++) {
-                    if (chars2[ci2].properties.write || chars2[ci2].properties.writeWithoutResponse) {
-                        characteristic = chars2[ci2]; break;
-                    }
-                }
-                if (characteristic) break;
+        var server = await _btConnect();
+        if (!_btChar) {
+            _btChar = await _btFindChar(server);
+            if (!_btChar) {
+                showToast('Tidak ditemukan port cetak pada printer', 'danger');
+                server.disconnect(); return;
             }
         }
 
-        if (!characteristic) {
-            showToast('Tidak ditemukan port cetak pada printer', 'danger');
-            server.disconnect(); return;
-        }
-
         var data = buildESCPOS(t);
-        var chunk = 100;
-        for (var i = 0; i < data.length; i += chunk) {
-            await characteristic.writeValue(data.slice(i, i + chunk));
-        }
+        showToast('Mencetak... (' + data.length + ' bytes)', 'info');
+        await _btSend(data);
 
         showToast('Tiket berhasil dicetak via Bluetooth', 'success');
-        setTimeout(function () { try { server.disconnect(); } catch (e) {} }, 500);
+        setTimeout(function () { try { server.disconnect(); } catch (e) {} }, 300);
     } catch (err) {
         var msg = (err.message || '').toLowerCase();
         if (msg.indexOf('adapter') > -1 || msg.indexOf('bluetooth not') > -1 || msg.indexOf('no bluetooth') > -1)
