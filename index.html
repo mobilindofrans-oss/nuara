@@ -14,7 +14,7 @@
     <link rel="icon" type="image/svg+xml" href="icon-gray.svg">
     <link rel="apple-touch-icon" href="icon.svg">
     <script>
-        if (location.protocol === 'https:' || location.protocol === 'http:') {
+        if (location.protocol === 'https:') {
             var m = document.createElement('link');
             m.rel = 'manifest';
             m.href = 'manifest.json';
@@ -57,7 +57,7 @@
         <div class="overlay-content" style="max-width:360px;">
             <div class="overlay-header">
                 <span><i class="fas fa-key"></i> Ganti PIN User</span>
-                <button onclick="getEl('overlayChangePin').style.display='none'" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                <button onclick="getEl('overlayChangePin').style.display='none'" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="overlay-body" style="flex-direction:column;padding:20px;">
                 <p style="text-align:center;margin:0 0 12px;font-size:16px;" id="changePinNama"></p>
@@ -93,7 +93,7 @@
         <div class="container">
             <div class="card">
                 <div class="card-title">
-                    <button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button>
+                    <button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button>
                     <i class="fas fa-store"></i> Kelola Agen
                 </div>
                 <div id="agenList"></div>
@@ -114,7 +114,7 @@
         <div class="container">
             <div class="card">
                 <div class="card-title">
-                    <button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button>
+                    <button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button>
                     <i class="fas fa-users"></i> Kelola User
                 </div>
                 <div id="userList"></div>
@@ -140,7 +140,7 @@
     <section id="sectionForm" class="section" role="tabpanel">
         <div class="container">
             <div class="card form-card">
-                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-pen-to-square"></i> Tiket Baru</div>
+                <div class="card-title"><button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button><i class="fas fa-pen-to-square"></i> Tiket Baru</div>
                 <form id="formTiket" autocomplete="off">
 
                     <div class="form-grid">
@@ -215,7 +215,7 @@
     <section id="sectionDaftar" class="section" role="tabpanel">
         <div class="container">
             <div class="card">
-                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-ticket"></i> Daftar Tiket</div>
+                <div class="card-title"><button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button><i class="fas fa-ticket"></i> Daftar Tiket</div>
                 <div class="filter-bar">
                     <i class="fas fa-search"></i>
                     <input type="text" id="filterInput" class="form-control" placeholder="Cari tiket, nama, armada..." aria-label="Cari tiket">
@@ -265,7 +265,7 @@
         <div class="container">
             <!-- PIN GATE -->
             <div id="laporanPinGate" class="card">
-                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-lock"></i> Masukkan PIN Laporan</div>
+                <div class="card-title"><button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button><i class="fas fa-lock"></i> Masukkan PIN Laporan</div>
                 <div class="form-group">
                     <input type="password" id="laporanPinInput" class="form-control" placeholder="Masukkan PIN" inputmode="numeric" maxlength="6">
                 </div>
@@ -276,7 +276,7 @@
             <!-- REPORT CONTENT -->
             <div id="laporanContent" style="display:none;">
                 <div class="card">
-                    <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-chart-line"></i> Laporan Keuangan</div>
+                    <div class="card-title"><button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button><i class="fas fa-chart-line"></i> Laporan Keuangan</div>
                     <div id="agenFilterLaporanBar" class="agen-filter-bar" style="display:none;">
                         <i class="fas fa-store"></i>
                         <select id="agenFilterLaporan" class="form-control" style="font-size:14px;">
@@ -325,7 +325,7 @@
                 <div class="overlay-content" style="max-width:320px;">
                     <div class="overlay-header">
                         <span><i class="fas fa-key"></i> Ganti PIN</span>
-                        <button onclick="closeGantiPin()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                        <button onclick="closeGantiPin()" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
                     </div>
                     <div class="overlay-body" style="flex-direction:column;gap:12px;padding:20px;">
                         <div class="form-group" style="margin:0;">
@@ -357,7 +357,7 @@
         <div class="container">
             <div class="card">
                 <div class="card-title">
-                    <button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button>
+                    <button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button>
                     <i class="fas fa-address-book"></i> Data Penumpang
                 </div>
                 <div style="margin-bottom:8px;">
@@ -377,7 +377,7 @@
     <section id="sectionPengaturan" class="section" role="tabpanel">
         <div class="container">
             <div class="card form-card">
-                <div class="card-title"><button class="btn-back" onclick="goHome()"><i class="fas fa-arrow-left"></i></button><i class="fas fa-gear"></i> Pengaturan</div>
+                <div class="card-title"><button class="btn-back" onclick="goHome()" aria-label="Kembali"><i class="fas fa-arrow-left"></i></button><i class="fas fa-gear"></i> Pengaturan</div>
 
                 <div class="form-group">
                     <label>Lebar Kertas Cetak</label>
@@ -414,9 +414,15 @@
 
                 <div class="form-group">
                     <label>Opsi Cetakan</label>
-                    <div class="toggle-row" id="toggleArsipRow">
+                    <div class="toggle-row">
                         <span class="toggle-label">Tampilkan Arsip Agen</span>
                         <div id="toggleArsip" class="toggle-switch active">
+                            <div class="toggle-track active"><div class="toggle-thumb"></div></div>
+                        </div>
+                    </div>
+                    <div class="toggle-row">
+                        <span class="toggle-label">Tampilkan Voucher Makan</span>
+                        <div id="toggleVoucher" class="toggle-switch active">
                             <div class="toggle-track active"><div class="toggle-thumb"></div></div>
                         </div>
                     </div>
@@ -474,7 +480,7 @@
         <div class="overlay-content" style="max-width:320px;">
             <div class="overlay-header">
                 <span id="confirmTitle">Konfirmasi</span>
-                <button onclick="closeConfirm()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                <button onclick="closeConfirm()" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="overlay-body" style="justify-content:flex-start;padding:24px 20px;">
                 <p id="confirmMessage" style="font-size:15px;text-align:center;width:100%;margin:0;"></p>
@@ -493,7 +499,7 @@
         <div class="overlay-content" style="max-width:360px;">
             <div class="overlay-header">
                 <span><i class="fas fa-store"></i> Edit Agen</span>
-                <button onclick="closeAgenEdit()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                <button onclick="closeAgenEdit()" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="overlay-body" style="flex-direction:column;gap:10px;padding:20px;">
                 <input type="hidden" id="editAgenId">
@@ -525,7 +531,7 @@
         <div class="overlay-content" style="max-width:320px;">
             <div class="overlay-header">
                 <span><i class="fas fa-user-pen"></i> Edit User</span>
-                <button onclick="closeUserEdit()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                <button onclick="closeUserEdit()" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="overlay-body" style="flex-direction:column;gap:10px;padding:20px;">
                 <input type="hidden" id="editUserId">
@@ -548,7 +554,7 @@
         <div class="overlay-content" style="max-width:320px;">
             <div class="overlay-header">
                 <span><i class="fas fa-lock"></i> Otorisasi Super Admin</span>
-                <button onclick="closeSuperPin()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                <button onclick="closeSuperPin()" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="overlay-body" style="flex-direction:column;gap:12px;padding:20px;">
                 <p id="superPinDesc" style="font-size:13px;text-align:center;margin:0;">Masukkan PIN Super Admin</p>
@@ -569,7 +575,7 @@
         <div class="overlay-content" style="max-width:360px;">
             <div class="overlay-header">
                 <span><i class="fas fa-check-circle" style="color:var(--success);"></i> Tiket Tersimpan</span>
-                <button onclick="closeSavedOverlay()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                <button onclick="closeSavedOverlay()" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="overlay-body" style="flex-direction:column;gap:8px;padding:20px;">
                 <table style="width:100%;font-size:14px;border-collapse:collapse;">
@@ -601,8 +607,8 @@
             <div class="overlay-header">
                 <span><i class="fas fa-print"></i> Preview Cetak</span>
                 <span style="display:flex;gap:6px;">
-                    <button class="overlay-close" onclick="downloadPDF()" title="Download PDF"><i class="fas fa-download"></i></button>
-                    <button onclick="closePreview()" class="overlay-close"><i class="fas fa-xmark"></i></button>
+                    <button class="overlay-close" onclick="downloadPDF()" title="Download PDF" aria-label="Download PDF"><i class="fas fa-download"></i></button>
+                    <button onclick="closePreview()" class="overlay-close" aria-label="Tutup"><i class="fas fa-xmark"></i></button>
                 </span>
             </div>
             <div class="overlay-body" id="previewBody"></div>
@@ -622,9 +628,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
     <script src="app.js"></script>
     <script>
-        if ((location.protocol === 'https:' || location.protocol === 'http:') && 'serviceWorker' in navigator) {
+        if (location.protocol === 'https:' && 'serviceWorker' in navigator) {
             window.addEventListener('load', function () {
                 navigator.serviceWorker.register('sw.js');
             });
